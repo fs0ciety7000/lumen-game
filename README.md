@@ -40,7 +40,7 @@ URL parameters for tests: `?autostart`, `?seed=N`, `?island=N` (start on island 
 4. **Verify**: `tools/play_offline.mjs` plays the whole game with the keyboard and films it; side-by-side
    pairs with the video are in `verify/`.
 
-## fal assets (32 calls)
+## fal assets (33 calls)
 
 | File(s) | Endpoint | From |
 |---|---|---|
@@ -56,10 +56,11 @@ URL parameters for tests: `?autostart`, `?seed=N`, `?island=N` (start on island 
 | `src/sky_night` → `tex/sky_night.webp` | `nano-banana-pro/edit` | f_001, f_025 |
 | `src/sky_dawn` → `tex/sky_dawn.webp` | `nano-banana-pro/edit` | sky_night, f_038 |
 | `src/clouds_concept` → `tex/clouds.webp` | `nano-banana-pro/edit` | f_038 |
+| `src/grass_tile` → `tex/grass.webp` (projected on the island tops at two scales) | `nano-banana-pro/edit` | f_017, f_038 |
 | `audio/pulse, dissolve, step, wind, bridge, ignite, whisper, charge` | `fal-ai/elevenlabs/sound-effects/v2` | text prompts |
 | `audio/music_night, music_dawn` | `elevenlabs/music/v2.5` (instrumental) | text prompts |
 
-Calls per endpoint: nano-banana-pro/edit 10, elevenlabs sound-effects v2 8, birefnet v2 6, tripo3d h3.1 3,
+Calls per endpoint: nano-banana-pro/edit 11, elevenlabs sound-effects v2 8, birefnet v2 6, tripo3d h3.1 3,
 elevenlabs music v2.5 2, meshy v7.1 1, meshy rigging 1, hunyuan-3d v3.1 pro 1. Full prompts and arguments are
 in `assets/src/fal_log.json` and `assets/audio/fal_log.json` (file names there are the raw downloads, before
 WebP conversion and GLB optimization).
@@ -86,9 +87,9 @@ procedural sprites, not images.
 
 - The camera follows from behind and above, like the video, but is a little closer, so the hero stays
   readable while you play.
-- The island tops are flat rather than domed, and the ferns are camera-facing cards, not 3D plants.
+- The island tops are flat rather than domed (grass is a fal tile projected from above), and the ferns are
+  camera-facing cards, not 3D plants.
 - The shadows look like the video's bramble creatures but have no rig: they move in squashing hops, turn
   and dissolve.
 - The lighthouse is visible far away from the start, so the goal reads. In the video it shows up only at the
   end.
-- The night sky is a little more cyan and the far rocks are crisper than in the video.

@@ -62,7 +62,7 @@ const lerp = THREE.MathUtils.lerp, clamp = THREE.MathUtils.clamp;
 const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 
 // ---------- palette, measured on the video frames (study/study.json, f_001..f_041) ----------
-const NIGHT = { fog: new THREE.Color(0x0a2c44), sky: new THREE.Color(0x022438), hemiTop: new THREE.Color(0x2d5a7a), hemiBot: new THREE.Color(0x0b1a14) };
+const NIGHT = { fog: new THREE.Color(0x072a42), sky: new THREE.Color(0x022438), hemiTop: new THREE.Color(0x2d5a7a), hemiBot: new THREE.Color(0x0b1a14) };
 const DAWN  = { fog: new THREE.Color(0xc98a58), sky: new THREE.Color(0xe8a060), hemiTop: new THREE.Color(0xffc890), hemiBot: new THREE.Color(0x5a3a28) };
 const LANTERN = 0xffcf8a;
 
@@ -123,10 +123,10 @@ const gltf = new GLTFLoader();
 const texL = new THREE.TextureLoader();
 const loadG = url => new Promise((res, rej) => gltf.load(url, res, undefined, rej));
 const loadT = url => new Promise((res, rej) => texL.load(url, t => { t.colorSpace = THREE.SRGBColorSpace; res(t); }, undefined, rej));
-const [heroG, lanternG, shadowG, islandG, islandLoG, lighthouseG, skyN, skyD, fernT, cloudT] = await Promise.all([
+const [heroG, lanternG, shadowG, islandG, islandLoG, lighthouseG, skyN, skyD, fernT, cloudT, grassT] = await Promise.all([
   loadG('assets/models/hero.glb'), loadG('assets/models/lantern.glb'), loadG('assets/models/shadow.glb'),
   loadG('assets/models/island.glb'), loadG('assets/models/island_lo.glb'), loadG('assets/models/lighthouse.glb'),
-  loadT('assets/tex/sky_night.webp'), loadT('assets/tex/sky_dawn.webp'), loadT('assets/tex/ferns.webp'), loadT('assets/tex/clouds.webp'),
+  loadT('assets/tex/sky_night.webp'), loadT('assets/tex/sky_dawn.webp'), loadT('assets/tex/ferns.webp'), loadT('assets/tex/clouds.webp'), loadT('assets/tex/grass.webp'),
 ]);
 cloudT.colorSpace = THREE.NoColorSpace;
 
@@ -154,7 +154,7 @@ const skyMat = new THREE.ShaderMaterial({
     void main(){ float u = vUv.x * 3. + uTime * .002; u = 1. - abs(mod(u, 2.) - 1.);
       vec2 uv = vec2(u, clamp(vUv.y, .002, .998));
       vec3 n = texture2D(tN, uv).rgb, d = texture2D(tD, uv).rgb;
-      n = pow(n, vec3(1.3)) * vec3(.45, .66, .95);
+      n = pow(n, vec3(1.55)) * vec3(.26, .46, .8);
       vec3 c = mix(n, d * .85, uDawn);
       gl_FragColor = vec4(c, 1.);
       #include <colorspace_fragment>
@@ -223,7 +223,7 @@ cg.setAttribute('iScale', new THREE.InstancedBufferAttribute(cScale, 2));
 cg.setAttribute('iCell', new THREE.InstancedBufferAttribute(cCell, 1));
 cg.instanceCount = CLOUDS;
 const cloudMat = new THREE.ShaderMaterial({
-  uniforms: { tC: { value: cloudT }, uFog: { value: NIGHT.fog.clone() }, uLit: { value: new THREE.Color(0x1f4c66) }, uDark: { value: new THREE.Color(0x05192a) },
+  uniforms: { tC: { value: cloudT }, uFog: { value: NIGHT.fog.clone() }, uLit: { value: new THREE.Color(0x173d58) }, uDark: { value: new THREE.Color(0x05192a) },
     uDensity: { value: .006 }, uTime: { value: 0 }, uGlow: { value: 0 } },
   vertexShader: `attribute vec3 iOff; attribute vec2 iScale; attribute float iCell; uniform float uTime; varying vec2 vUv; varying float vDepth;
     void main(){ vec3 o = iOff + vec3(sin(uTime * .05 + iOff.z) * 4., 0., 0.);
@@ -242,12 +242,36 @@ const cloudMat = new THREE.ShaderMaterial({
 const clouds = new THREE.Mesh(cg, cloudMat); clouds.frustumCulled = false; clouds.renderOrder = -5; if (!Q.has('noclouds')) scene.add(clouds);
 
 // ---------- islands ----------
+// the fal grass tile is projected from above on every upward-facing surface, at two scales so it never reads as a grid
+grassT.wrapS = grassT.wrapT = THREE.RepeatWrapping; grassT.anisotropy = 8;
+function addGrass(mat, extraFog = 1) {
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.tGrass = { value: grassT };
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vGW; varying vec3 vGN;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvGW = (modelMatrix * vec4(transformed, 1.)).xyz; vGN = normalize(mat3(modelMatrix) * objectNormal);');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D tGrass; varying vec3 vGW; varying vec3 vGN;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        float up = smoothstep(.5, .82, normalize(vGN).y);
+        vec3 g1 = texture2D(tGrass, vGW.xz * .32).rgb, g2 = texture2D(tGrass, vGW.xz * .071 + .37).rgb;
+        vec3 grass = mix(g1, g2, .45) * vec3(.95, 1.05, .9);
+        diffuseColor.rgb = mix(diffuseColor.rgb, grass, up * .92);`)
+      .replace('#include <fog_fragment>', `#ifdef USE_FOG
+          float fogFactor = 1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth * ${extraFog.toFixed(2)});
+          gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor);
+        #endif`);
+  };
+  mat.customProgramCacheKey = () => 'grass' + extraFog;
+}
 const islandProto = fit(islandG.scene, { w: 1 });
 softenMaterials(islandProto);
 islandProto.traverse(m => { if (m.isMesh) { m.material.color.setRGB(.9, .95, .85); m.castShadow = false; } });
 const islandLo = fit(islandLoG.scene, { w: 1 });
 softenMaterials(islandLo);
 islandLo.traverse(m => { if (m.isMesh) { m.material.color.setRGB(.9, .95, .85); m.castShadow = false; } });
+islandProto.traverse(m => { if (m.isMesh) addGrass(m.material); });
+islandLo.traverse(m => { if (m.isMesh) addGrass(m.material); });
+// far rocks melt deeper into the haze than the playable islands, like the video's distant silhouettes
+const farMat = (() => { let mt; islandLo.traverse(m => { if (m.isMesh) mt = m.material; }); const c = mt.clone(); addGrass(c, 2.6); return c; })();
 const down = new THREE.Raycaster(); down.ray.direction.set(0, -1, 0);
 function topOf(obj, x = 0, z = 0) {
   obj.updateMatrixWorld(true); const wp = obj.getWorldPosition(new THREE.Vector3());
@@ -321,7 +345,7 @@ for (let i = 0; i < 20; i++) {
   const side = i % 2 ? 1 : -1, z = 10 - rand() * 330, x = side * (40 + rand() * 130), up = rand() < .3;
   const g = islandLo.clone(true); g.scale.setScalar(5 + rand() * 16);
   g.position.set(x, up ? 26 + rand() * 30 : -14 + rand() * 22, z); g.rotation.set(up ? Math.PI : 0, rand() * 6.28, (rand() - .5) * .2);
-  g.traverse(m => { if (m.isMesh) { m.castShadow = false; } });
+  g.traverse(m => { if (m.isMesh) { m.castShadow = false; m.material = farMat; } });
   scene.add(g); farIslands.push(g);
 }
 
@@ -724,7 +748,7 @@ function frame(forced) {
   sun.intensity = D * 1.8; sun.position.set(S.pos.x + 4, S.pos.y + 22, S.pos.z - 40); sun.target.position.copy(S.pos);
   moon.intensity = .35 * (1 - D);
   cloudMat.uniforms.uFog.value.copy(scene.fog.color); cloudMat.uniforms.uDensity.value = lerp(.0055, .0035, D);
-  cloudMat.uniforms.uLit.value.set(0x1f4c66).lerp(new THREE.Color(0xffd3a0), D); cloudMat.uniforms.uDark.value.set(0x05192a).lerp(new THREE.Color(0xa86a4a), D);
+  cloudMat.uniforms.uLit.value.set(0x173d58).lerp(new THREE.Color(0xffd3a0), D); cloudMat.uniforms.uDark.value.set(0x05192a).lerp(new THREE.Color(0xa86a4a), D);
   const igniteK = S.dawnT >= 0 ? clamp(S.dawnT / 1.2, 0, 1) : 0;
   lamp.material.color.setRGB(1, .7, .35).multiplyScalar(.6 + 3.5 * igniteK + (S.dawnT < 0 ? Math.max(0, Math.sin(now * 1.3)) * .8 : 0));
   lampLight.intensity = igniteK * 900;

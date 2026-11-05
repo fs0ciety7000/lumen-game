@@ -378,5 +378,23 @@
   "files": [
    "assets/src/clouds_concept.png"
   ]
+ },
+ {
+  "endpoint": "fal-ai/nano-banana-pro/edit",
+  "name": "grass_tile",
+  "seconds": 25.8,
+  "arguments": {
+   "resolution": "1K",
+   "aspect_ratio": "1:1",
+   "output_format": "png",
+   "image_urls": [
+    "https://v3b.fal.media/files/b/0ab13c21/0B491Rf8_I0O98JNUoYFi_f_017.jpg",
+    "https://v3b.fal.media/files/b/0ab13c21/qUyUTSuO4Ob6v2krUifvf_f_038.jpg"
+   ]
+  },
+  "prompt": "Seamless tileable texture of the short stylised grass covering the island tops in the reference: soft painted low-poly game style, olive and sage green with subtle ochre patches and tiny clover tufts, top-down orthographic view, flat even neutral light, no shadows, no perspective, no rocks, no objects, edges must tile seamlessly",
+  "files": [
+   "assets/src/grass_tile.png"
+  ]
  }
 ]
