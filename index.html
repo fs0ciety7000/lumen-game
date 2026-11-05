@@ -541,7 +541,7 @@ function firePulse() {
   const R = 3.2 + 5 * c;
   S.pulse = { t: 0, R, x: S.pos.x, y: S.pos.y, z: S.pos.z, dur: .55 + .25 * c };
   sfx('pulse', .9, 1.05 - c * .1); S.shake = .25 + .3 * c;
-  play('Skill_01', .12); S.castT = 1.1;
+  play('Skill_01', .12); S.castT = .85;
   const I = islands[S.island];
   if (I?.beacon && Math.hypot(S.pos.x - I.x, S.pos.z - I.z) < 2.6 && S.dawnT < 0) ignite();
   for (let k = 0; k < 90 + 120 * c; k++) { const a = rand() * 6.28, sp = R * (1.2 + rand() * .8);
@@ -568,17 +568,17 @@ function frame(forced) {
     S.t += dt;
     // walk, constrained to the islands and the stones (no fall: the edge stops her)
     let mx = inp.x, mz = inp.z; const ml = Math.hypot(mx, mz); if (ml > 1) { mx /= ml; mz /= ml; }
-    const speed = S.charging ? 1.3 : 2.9;
+    const speed = S.castT > 0 ? 0 : S.charging ? 1.2 : 2.6;
     S.vel.x = THREE.MathUtils.damp(S.vel.x, mx * speed, 9, dt); S.vel.z = THREE.MathUtils.damp(S.vel.z, mz * speed, 9, dt);
     const tryMove = (dx, dz) => {
       const nx = S.pos.x + dx, nz = S.pos.z + dz, h = heightAt(nx, nz, S.pos.y);
       if (h !== null && h - S.pos.y < .45 && S.pos.y - h < 1.2) { S.pos.x = nx; S.pos.z = nz; S.pos.y = THREE.MathUtils.damp(S.pos.y, h, 18, dt); return true; } return false;
     };
     if (!tryMove(S.vel.x * dt, S.vel.z * dt)) { if (!tryMove(S.vel.x * dt, 0)) S.vel.x = 0; if (!tryMove(0, S.vel.z * dt)) S.vel.z = 0; }
-    const sp = Math.hypot(S.vel.x, S.vel.z); moving = sp > .35 && ml > .1;
+    const sp = Math.hypot(S.vel.x, S.vel.z); S.speed = sp; moving = sp > .3;
     if (ml > .1) S.facing = Math.atan2(mx, mz);
     hero.rotation.y = THREE.MathUtils.damp(hero.rotation.y, hero.rotation.y + ((S.facing - hero.rotation.y + Math.PI * 3) % (Math.PI * 2) - Math.PI), 10, dt);
-    S.stepT -= dt * sp; if (moving && S.stepT <= 0) { S.stepT = 1.15; sfx('step', .35, .9 + rand() * .2); }
+    S.stepT -= dt * sp; if (moving && S.stepT <= 0) { S.stepT = S.charging ? .5 : .82; sfx('step', .35, .9 + rand() * .2); }
     const ii = islandAt(S.pos.x, S.pos.z); if (ii >= 0) { S.island = ii; if (islands[ii].cleared) S.lastSafe = ii; }
 
     // lantern: hold to charge, release to pulse
@@ -665,9 +665,12 @@ function frame(forced) {
 
   // hero animation + lantern in her right hand
   mixer.update(dt);
-  if (S.castT > 0) { S.castT -= dt; if (S.castT <= 0 && S.dawnT < 0) current = null; }
-  if (!(S.castT > 0) && S.dawnT < 0) play(moving ? 'Walking_Woman' : 'Idle', .25);
-  if (clips.Walking_Woman) clips.Walking_Woman.timeScale = 1.15;
+  // locomotion: in-place Meshy clips, played at the speed she really moves so the feet do not slide
+  if (S.castT > 0) S.castT -= dt;
+  const sp = S.speed || 0;
+  if (!(S.castT > 0) && S.dawnT < 0 && S.phase === 'play') play(!moving ? 'Idle' : sp < 1.6 ? 'Walking_Woman' : 'running', .2);
+  clips.running.timeScale = clamp(sp / 2.3, .7, 1.3);
+  clips.Walking_Woman.timeScale = clamp(sp / 1.0, .6, 1.4);
   hero.updateMatrixWorld(true);
   if (rightHand) rightHand.getWorldPosition(tmp); else tmp.set(S.pos.x + .3, S.pos.y + .6, S.pos.z);
   const lift = S.charging ? S.charge * .25 : 0;
