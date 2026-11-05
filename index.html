@@ -288,10 +288,13 @@ for (let i = 0; i < islands.length - 1; i++) {
   const a = new THREE.Vector3(A.x, A.y, A.z), b = new THREE.Vector3(B.x, B.y, B.z), dir = b.clone().sub(a);
   const len = Math.hypot(dir.x, dir.z); dir.y = 0; dir.normalize();
   const s0 = A.d * .5 - .9, s1 = len - B.d * .5 + .9, n = Math.ceil((s1 - s0) / 1.55);
+  // stone heights follow the real surface where the path leaves A and lands on B (the rims are not flat)
+  const rim = (I, t) => { const q = a.clone().addScaledVector(dir, t); down.ray.origin.set(q.x, I.y + 20, q.z); const h = down.intersectObject(I.mesh, true)[0]; return h ? h.point.y : I.y; };
+  const hA = rim(A, s0 - .6), hB = rim(B, s1 + .6);
   const stones = [];
   for (let k = 0; k <= n; k++) {
     const t = s0 + (s1 - s0) * k / n, f = t / len;
-    const p = a.clone().addScaledVector(dir, t); const top = lerp(A.y, B.y, f) - .05;
+    const p = a.clone().addScaledVector(dir, t); const top = lerp(hA, hB, (t - s0) / (s1 - s0)) - .05;
     const side = Math.sin(k * 1.9 + i) * .35;
     const st = makeIsland(2.3 + rand() * .4, p.x + dir.z * side, top, p.z - dir.x * side, rand() * 6.28, islandLo);
     st.userData = { top: st.position.y, delay: k * .12 };
@@ -572,7 +575,7 @@ function frame(forced) {
     S.vel.x = THREE.MathUtils.damp(S.vel.x, mx * speed, 9, dt); S.vel.z = THREE.MathUtils.damp(S.vel.z, mz * speed, 9, dt);
     const tryMove = (dx, dz) => {
       const nx = S.pos.x + dx, nz = S.pos.z + dz, h = heightAt(nx, nz, S.pos.y);
-      if (h !== null && h - S.pos.y < .45 && S.pos.y - h < 1.2) { S.pos.x = nx; S.pos.z = nz; S.pos.y = THREE.MathUtils.damp(S.pos.y, h, 18, dt); return true; } return false;
+      if (h !== null && h - S.pos.y < .55 && S.pos.y - h < 1.2) { S.pos.x = nx; S.pos.z = nz; S.pos.y = THREE.MathUtils.damp(S.pos.y, h, 18, dt); return true; } return false;
     };
     if (!tryMove(S.vel.x * dt, S.vel.z * dt)) { if (!tryMove(S.vel.x * dt, 0)) S.vel.x = 0; if (!tryMove(0, S.vel.z * dt)) S.vel.z = 0; }
     const sp = Math.hypot(S.vel.x, S.vel.z); S.speed = sp; moving = sp > .3;
