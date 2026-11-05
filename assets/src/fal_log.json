@@ -1,0 +1,382 @@
+[
+ {
+  "endpoint": "fal-ai/nano-banana-pro/edit",
+  "name": "hero_concept",
+  "seconds": 20.8,
+  "arguments": {
+   "resolution": "1K",
+   "aspect_ratio": "3:4",
+   "output_format": "png",
+   "image_urls": [
+    "https://v3b.fal.media/files/b/0ab13109/4KTQlkoMoT9Rmqyuv5AHq_f_005.jpg",
+    "https://v3b.fal.media/files/b/0ab13109/mkKfRnp5_cAUvzjg3Qx1P_f_038.jpg"
+   ]
+  },
+  "prompt": "The same small stylised girl from the reference, alone, full body, front view, A-pose with arms slightly away from the body, holding a small glowing brass lantern in her right hand, dark bob hair, short dark teal dress, bare legs, small dark shoes, cute stylised 3D game character proportions (big head), neutral expression, plain light grey background, even soft studio light, same art style and colors as the reference",
+  "files": [
+   "assets/src/hero_concept.png"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/nano-banana-pro/edit",
+  "name": "hero_nolantern",
+  "seconds": 21.9,
+  "arguments": {
+   "resolution": "1K",
+   "aspect_ratio": "3:4",
+   "output_format": "png",
+   "image_urls": [
+    "https://v3b.fal.media/files/b/0ab1310c/iQOAe9S6DhMcnzbKF54YN_hero_concept.png"
+   ]
+  },
+  "prompt": "Exactly the same character, same pose, same framing and background, but with empty open hands: remove the lantern completely",
+  "files": [
+   "assets/src/hero_nolantern.png"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/birefnet/v2",
+  "name": "hero_cutout",
+  "seconds": 1.6,
+  "arguments": {
+   "output_format": "png",
+   "image_url": "https://v3b.fal.media/files/b/0ab1310e/mgdGBxY2kLn-u4Z2yc-1n_hero_nolantern.png"
+  },
+  "prompt": null,
+  "files": [
+   "assets/src/hero_cutout.png"
+  ]
+ },
+ {
+  "endpoint": "meshy/v7.1/image-to-3d",
+  "name": "hero3d",
+  "seconds": 277.9,
+  "arguments": {
+   "pose_mode": "a-pose",
+   "target_polycount": 20000,
+   "symmetry_mode": "on",
+   "image_url": "https://v3b.fal.media/files/b/0ab13110/nF9CTNcD095XvyIqXw52g_hero_cutout.png"
+  },
+  "prompt": null,
+  "files": [
+   "assets/src/hero3d_0.glb",
+   "assets/src/hero3d_1.png",
+   "assets/src/hero3d_2.glb",
+   "assets/src/hero3d_3.fbx",
+   "assets/src/hero3d_4.obj",
+   "assets/src/hero3d_5.usdz",
+   "assets/src/hero3d_6.stl",
+   "assets/src/hero3d_7.png"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/meshy/rigging/multi-animation",
+  "name": "hero_rig",
+  "seconds": 112.4,
+  "arguments": {
+   "animation_action_ids": [
+    0,
+    1,
+    17,
+    59
+   ],
+   "height_meters": 1.1,
+   "model_url": "https://v3b.fal.media/files/b/0ab1312f/lVJm1Vjvl7vcBgti0LLGh_hero3d_0.glb"
+  },
+  "prompt": null,
+  "files": [
+   "assets/src/hero_rig_0.glb",
+   "assets/src/hero_rig_1.fbx",
+   "assets/src/hero_rig_2.glb",
+   "assets/src/hero_rig_3.fbx",
+   "assets/src/hero_rig_4.glb",
+   "assets/src/hero_rig_5.glb",
+   "assets/src/hero_rig_6.fbx",
+   "assets/src/hero_rig_7.glb",
+   "assets/src/hero_rig_8.glb",
+   "assets/src/hero_rig_9.fbx",
+   "assets/src/hero_rig_10.glb",
+   "assets/src/hero_rig_11.fbx",
+   "assets/src/hero_rig_12.glb",
+   "assets/src/hero_rig_13.fbx",
+   "assets/src/hero_rig_14.glb",
+   "assets/src/hero_rig_15.fbx"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/nano-banana-pro/edit",
+  "name": "lantern_concept",
+  "seconds": 20.6,
+  "arguments": {
+   "resolution": "1K",
+   "aspect_ratio": "1:1",
+   "output_format": "png",
+   "image_urls": [
+    "https://v3b.fal.media/files/b/0ab1313e/7oTnkDc9WuViYZHZnj28e_hero_concept.png"
+   ]
+  },
+  "prompt": "Only the small brass hurricane lantern from the reference, alone, centered, upright, three-quarter view, with its top carry handle, glass globe with a warm glowing flame, stylised game prop, plain light grey background, even soft studio light, same art style",
+  "files": [
+   "assets/src/lantern_concept.png"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/birefnet/v2",
+  "name": "lantern_cutout",
+  "seconds": 2.1,
+  "arguments": {
+   "output_format": "png",
+   "image_url": "https://v3b.fal.media/files/b/0ab13140/kDHnVLmHHepJpgHhY4xCb_lantern_concept.png"
+  },
+  "prompt": null,
+  "files": [
+   "assets/src/lantern_cutout.png"
+  ]
+ },
+ {
+  "endpoint": "tripo3d/h3.1/image-to-3d",
+  "name": "lantern3d",
+  "seconds": 104.4,
+  "arguments": {
+   "face_limit": 6000,
+   "pbr": true,
+   "image_url": "https://v3b.fal.media/files/b/0ab13141/9LQz-gClh8pc623q5r_i6_lantern_cutout.png"
+  },
+  "prompt": null,
+  "files": [
+   "assets/src/lantern3d_0.glb",
+   "assets/src/lantern3d_1.glb",
+   "assets/src/lantern3d_2.glb",
+   "assets/src/lantern3d_3.png"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/nano-banana-pro/edit",
+  "name": "shadow_concept",
+  "seconds": 22.0,
+  "arguments": {
+   "resolution": "1K",
+   "aspect_ratio": "1:1",
+   "output_format": "png",
+   "image_urls": [
+    "https://v3b.fal.media/files/b/0ab13154/CtdOO0g57uehgrX89lA2E_f_005.jpg",
+    "https://v3b.fal.media/files/b/0ab13155/POIsERTmF42kpy6xtH2Pt_f_009.jpg"
+   ]
+  },
+  "prompt": "One of the dark shadow creatures from the reference, alone: a round hunched lump of dark thorny bramble and smoky black fur, two small glowing violet eyes, little stubby feet, stylised low-poly game creature, cute but ominous, full body, front three-quarter view, centered, plain light grey background, even soft studio light so the shape is readable, same art style",
+  "files": [
+   "assets/src/shadow_concept.png"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/birefnet/v2",
+  "name": "shadow_cutout",
+  "seconds": 1.7,
+  "arguments": {
+   "output_format": "png",
+   "image_url": "https://v3b.fal.media/files/b/0ab13157/GkfP90c4SShe2Qqe2cA8e_shadow_concept.png"
+  },
+  "prompt": null,
+  "files": [
+   "assets/src/shadow_cutout.png"
+  ]
+ },
+ {
+  "endpoint": "tripo3d/h3.1/image-to-3d",
+  "name": "shadow3d",
+  "seconds": 287.2,
+  "arguments": {
+   "face_limit": 8000,
+   "pbr": true,
+   "image_url": "https://v3b.fal.media/files/b/0ab13158/jMwKtcRqHZGDDY0WNSjL0_shadow_cutout.png"
+  },
+  "prompt": null,
+  "files": [
+   "assets/src/shadow3d_0.glb",
+   "assets/src/shadow3d_1.glb",
+   "assets/src/shadow3d_2.glb",
+   "assets/src/shadow3d_3.png"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/nano-banana-pro/edit",
+  "name": "island_concept",
+  "seconds": 22.9,
+  "arguments": {
+   "resolution": "1K",
+   "aspect_ratio": "1:1",
+   "output_format": "png",
+   "image_urls": [
+    "https://v3b.fal.media/files/b/0ab1317d/cNsCbIdfAACsZyalOwi-9_f_017.jpg",
+    "https://v3b.fal.media/files/b/0ab1317d/AtlZPwgZ2GQzreauyBgnI_f_013.jpg"
+   ]
+  },
+  "prompt": "One floating rock island from the reference, alone, seen from a three-quarter elevated angle: a round flat grassy top with soft olive-green grass, a few small boulders on the rim, under it a big faceted low-poly rock body tapering to a point below, stylised painted game asset, no character, no creatures, no plants taller than ankle height, centered, plain light grey background, even neutral studio light, same art style and materials",
+  "files": [
+   "assets/src/island_concept.png"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/birefnet/v2",
+  "name": "island_cutout",
+  "seconds": 1.4,
+  "arguments": {
+   "output_format": "png",
+   "image_url": "https://v3b.fal.media/files/b/0ab13181/coAqhbaPQgemRDPW90gzH_island_concept.png"
+  },
+  "prompt": null,
+  "files": [
+   "assets/src/island_cutout.png"
+  ]
+ },
+ {
+  "endpoint": "tripo3d/h3.1/image-to-3d",
+  "name": "island3d",
+  "seconds": 207.7,
+  "arguments": {
+   "face_limit": 8000,
+   "pbr": false,
+   "image_url": "https://v3b.fal.media/files/b/0ab13182/lBVZw8EoPEMA7p-aMWJ4b_island_cutout.png"
+  },
+  "prompt": null,
+  "files": [
+   "assets/src/island3d_0.glb",
+   "assets/src/island3d_1.glb",
+   "assets/src/island3d_2.png"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/nano-banana-pro/edit",
+  "name": "lighthouse_concept",
+  "seconds": 19.8,
+  "arguments": {
+   "resolution": "1K",
+   "aspect_ratio": "1:1",
+   "output_format": "png",
+   "image_urls": [
+    "https://v3b.fal.media/files/b/0ab13197/j3cpiVRQaCn8UbuJm2j34_f_033.jpg",
+    "https://v3b.fal.media/files/b/0ab13197/L9jkxe-ApZwbIxBzax-V3_f_038.jpg"
+   ]
+  },
+  "prompt": "The lighthouse island from the reference, alone: a tall slender cream stone lighthouse with a dark lantern room and gallery on top, standing on a wide flat floating rock plateau with low stone walls, two small stone cottages with dark roofs beside it, faceted low-poly rock underside tapering down, stylised painted game asset, full object visible, centered, plain light grey background, even neutral studio light, no glow, no light beams, same art style and materials",
+  "files": [
+   "assets/src/lighthouse_concept.png"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/birefnet/v2",
+  "name": "lighthouse_cutout",
+  "seconds": 1.2,
+  "arguments": {
+   "output_format": "png",
+   "image_url": "https://v3b.fal.media/files/b/0ab1319a/Y-Kc7Vi4OjC1BEHBl3t9e_lighthouse_concept.png"
+  },
+  "prompt": null,
+  "files": [
+   "assets/src/lighthouse_cutout.png"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/hunyuan-3d/v3.1/pro/image-to-3d",
+  "name": "lighthouse3d",
+  "seconds": 134.9,
+  "arguments": {
+   "face_count": 60000,
+   "input_image_url": "https://v3b.fal.media/files/b/0ab1319b/_Jd5Zu1y4oYDW0RCCqg2L_lighthouse_cutout.png"
+  },
+  "prompt": null,
+  "files": [
+   "assets/src/lighthouse3d_0.glb",
+   "assets/src/lighthouse3d_1.png",
+   "assets/src/lighthouse3d_2.glb",
+   "assets/src/lighthouse3d_3.obj",
+   "assets/src/lighthouse3d_4.mtl",
+   "assets/src/lighthouse3d_5.png"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/nano-banana-pro/edit",
+  "name": "ferns_concept",
+  "seconds": 31.7,
+  "arguments": {
+   "resolution": "2K",
+   "aspect_ratio": "1:1",
+   "output_format": "png",
+   "image_urls": [
+    "https://v3b.fal.media/files/b/0ab131aa/en5dbRdlUNMGZASBhyq62_f_017.jpg",
+    "https://v3b.fal.media/files/b/0ab131aa/zMFtaJ1b1Y0o6PG7dj8pz_f_038.jpg"
+   ]
+  },
+  "prompt": "Sprite sheet: a 2 by 2 grid of four separate stylised game plants from the reference, each one isolated with wide empty space around it, seen from the side: top-left a lush fern clump, top-right a tall grass tuft, bottom-left a small fern, bottom-right a leafy fern sprig. Soft painted low-poly style, olive and sage green, matte, flat even neutral light, on a flat pure white background, no ground, no shadows",
+  "files": [
+   "assets/src/ferns_concept.png"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/birefnet/v2",
+  "name": "ferns_cutout",
+  "seconds": 2.1,
+  "arguments": {
+   "output_format": "png",
+   "operating_resolution": "2048x2048",
+   "image_url": "https://v3b.fal.media/files/b/0ab131ad/Im8f7l8tFa2RO1B9JtApH_ferns_concept.png"
+  },
+  "prompt": null,
+  "files": [
+   "assets/src/ferns_cutout.png"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/nano-banana-pro/edit",
+  "name": "sky_night",
+  "seconds": 26.1,
+  "arguments": {
+   "resolution": "2K",
+   "aspect_ratio": "21:9",
+   "output_format": "png",
+   "image_urls": [
+    "https://v3b.fal.media/files/b/0ab131af/ETbG8tkG4aFR1S2yEbWB__f_001.jpg",
+    "https://v3b.fal.media/files/b/0ab131af/2XkcWV-XIcRQ_NSJIWxzr_f_025.jpg"
+   ]
+  },
+  "prompt": "A wide seamless panoramic sky background in the exact style and colors of the reference: deep night teal-blue sky, soft layered painted clouds, darker at the top, a misty sea of clouds filling the lower third, no islands, no rocks, no characters, no lighthouse, no text, horizon at 60 percent height, soft painterly game art, even atmospheric haze",
+  "files": [
+   "assets/src/sky_night.png"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/nano-banana-pro/edit",
+  "name": "sky_dawn",
+  "seconds": 28.4,
+  "arguments": {
+   "resolution": "2K",
+   "aspect_ratio": "21:9",
+   "output_format": "png",
+   "image_urls": [
+    "https://v3b.fal.media/files/b/0ab131b2/leVpeqccC7tpA5iqP_4_P_sky_night.png",
+    "https://v3b.fal.media/files/b/0ab131b2/PmrvuTM9B0nBqsGH8b6g1_f_038.jpg"
+   ]
+  },
+  "prompt": "Repaint the first image as a warm golden dawn with the exact same composition and clouds: glowing amber and peach sky, soft orange backlit clouds, a bright warm haze at the horizon center, golden sea of clouds, colors and light exactly like the second reference image. No islands, no rocks, no lighthouse, no characters, no text",
+  "files": [
+   "assets/src/sky_dawn.png"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/nano-banana-pro/edit",
+  "name": "clouds_concept",
+  "seconds": 23.0,
+  "arguments": {
+   "resolution": "2K",
+   "aspect_ratio": "1:1",
+   "output_format": "png",
+   "image_urls": [
+    "https://v3b.fal.media/files/b/0ab131b6/zNGR6qr5apz96j1-tSk4Y_f_038.jpg"
+   ]
+  },
+  "prompt": "Sprite sheet: a 2 by 2 grid of four separate soft fluffy painted cloud puffs in the style of the reference sea of clouds, each isolated and fully inside its cell with wide empty margins, pure white and light grey clouds, soft edges, on a flat pure black background, no grid lines, no text",
+  "files": [
+   "assets/src/clouds_concept.png"
+  ]
+ }
+]

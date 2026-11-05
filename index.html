@@ -1,0 +1,737 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LUMEN – The Lost Lighthouse</title>
+<link rel="icon" href="data:,">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #010c15; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  .ui { position: fixed; inset: 0; pointer-events: none; font-family: 'Cormorant Garamond', Georgia, serif; color: #f6dfb0; }
+  #title, #end { display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 1.2s; text-align: center; }
+  #title h1, #end h1 { font-weight: 600; font-size: clamp(48px, 9vw, 120px); letter-spacing: .32em; margin: 0 0 0 .32em;
+    text-shadow: 0 0 24px rgba(255, 190, 90, .55), 0 0 60px rgba(255, 160, 60, .25); }
+  #title h2, #end h2 { font-weight: 400; font-style: italic; font-size: clamp(18px, 2.4vw, 30px); margin: .2em 0 2.4em; opacity: .85; letter-spacing: .08em; }
+  .controls { font-size: clamp(14px, 1.5vw, 19px); letter-spacing: .12em; opacity: .75; }
+  #title { justify-content: flex-start; padding-top: 12vh; }
+  #end { opacity: 0; color: #fff3d8; justify-content: flex-end; align-items: flex-start; text-align: left; padding: 0 0 5vh 5vw; }
+  #end h1 { font-size: clamp(28px, 3.5vw, 48px); margin: 0; } #end h2 { margin: .1em 0 .8em; font-size: clamp(15px, 1.6vw, 22px); }
+  #end h1 { text-shadow: 0 0 30px rgba(255, 220, 160, .8); }
+  #hud { opacity: 0; transition: opacity 1s; }
+  #energy { position: absolute; left: 28px; bottom: 26px; width: 34px; height: 34px; border-radius: 50%;
+    background: radial-gradient(circle, #fff1c4 0%, #ffbe5c 35%, rgba(255, 150, 40, 0) 70%); }
+  #dots { position: absolute; right: 30px; top: 26px; display: flex; gap: 12px; }
+  #dots i { width: 9px; height: 9px; border-radius: 50%; background: rgba(160, 190, 210, .25); box-shadow: none; transition: all .8s; }
+  #dots i.on { background: #ffd27a; box-shadow: 0 0 10px #ffb04a, 0 0 22px rgba(255, 170, 60, .6); }
+  #fade { position: fixed; inset: 0; background: #010a12; opacity: 0; pointer-events: none; transition: opacity .7s; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "./lib/three/three.module.js",
+  "three/addons/": "./lib/three/jsm/"
+} }
+</script>
+</head>
+<body>
+<div class="ui" id="title"><h1>LUMEN</h1><h2>The Lost Lighthouse</h2>
+  <div class="controls">WASD / arrows to walk · hold Space to raise the lantern · Enter to begin</div></div>
+<div class="ui" id="hud"><div id="energy"></div><div id="dots"><i></i><i></i><i></i><i></i></div></div>
+<div class="ui" id="end"><h1>LUMEN</h1><h2>the lighthouse is lit</h2><div class="controls">R to walk again</div></div>
+<div id="fade"></div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const Q = new URLSearchParams(location.search);
+let seed = +(Q.get('seed') || 7);
+const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+const lerp = THREE.MathUtils.lerp, clamp = THREE.MathUtils.clamp;
+const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+// ---------- palette, measured on the video frames (study/study.json, f_001..f_041) ----------
+const NIGHT = { fog: new THREE.Color(0x0a2c44), sky: new THREE.Color(0x022438), hemiTop: new THREE.Color(0x2d5a7a), hemiBot: new THREE.Color(0x0b1a14) };
+const DAWN  = { fog: new THREE.Color(0xc98a58), sky: new THREE.Color(0xe8a060), hemiTop: new THREE.Color(0xffc890), hemiBot: new THREE.Color(0x5a3a28) };
+const LANTERN = 0xffcf8a;
+
+// ---------- renderer, scene, camera ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(NIGHT.fog.clone(), 0.016);
+scene.background = NIGHT.sky.clone();
+const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 4000);
+
+const hemi = new THREE.HemisphereLight(NIGHT.hemiTop.clone(), NIGHT.hemiBot.clone(), 0.55);
+scene.add(hemi);
+const moon = new THREE.DirectionalLight(0x6f98c0, 0.35);
+moon.position.set(-20, 30, 10);
+scene.add(moon);
+const sun = new THREE.DirectionalLight(0xffc888, 0);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -18, right: 18, top: 18, bottom: -18, near: 1, far: 200 });
+sun.shadow.bias = -0.0008;
+scene.add(sun, sun.target);
+
+// ---------- post: bloom + one grade (lift teal shadows, warm highlights), vignette, grain, fade ----------
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.55, 0.35, 0.78);
+composer.addPass(bloom);
+const grade = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uDawn: { value: 0 }, uVignette: { value: 0.55 }, uGrain: { value: 0.012 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float uTime, uVignette, uGrain, uDawn; varying vec2 vUv;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main(){ vec3 c = texture2D(tDiffuse, vUv).rgb;
+      float l = dot(c, vec3(.299,.587,.114));
+      vec3 nightShadow = vec3(.004,.03,.05), nightGain = vec3(1.02,1.0,.97);
+      vec3 dawnShadow = vec3(.05,.025,.02), dawnGain = vec3(1.06,.98,.88);
+      vec3 lift = mix(nightShadow, dawnShadow, uDawn), gain = mix(nightGain, dawnGain, uDawn);
+      c = c * gain + lift * (1. - smoothstep(0., .5, l));
+      c = mix(vec3(l), c, mix(1.05, 1.1, uDawn));
+      c *= 1. - uVignette * smoothstep(.3, .95, length((vUv - .5) * vec2(1.15, 1.)) * 1.3);
+      c += (h(vUv * 997. + fract(uTime) * 13.) - .5) * uGrain;
+      gl_FragColor = vec4(c, 1.); }`,
+});
+composer.addPass(grade);
+composer.addPass(new OutputPass());
+
+// ---------- loading ----------
+const gltf = new GLTFLoader();
+const texL = new THREE.TextureLoader();
+const loadG = url => new Promise((res, rej) => gltf.load(url, res, undefined, rej));
+const loadT = url => new Promise((res, rej) => texL.load(url, t => { t.colorSpace = THREE.SRGBColorSpace; res(t); }, undefined, rej));
+const [heroG, lanternG, shadowG, islandG, islandLoG, lighthouseG, skyN, skyD, fernT, cloudT] = await Promise.all([
+  loadG('assets/models/hero.glb'), loadG('assets/models/lantern.glb'), loadG('assets/models/shadow.glb'),
+  loadG('assets/models/island.glb'), loadG('assets/models/island_lo.glb'), loadG('assets/models/lighthouse.glb'),
+  loadT('assets/tex/sky_night.webp'), loadT('assets/tex/sky_dawn.webp'), loadT('assets/tex/ferns.webp'), loadT('assets/tex/clouds.webp'),
+]);
+cloudT.colorSpace = THREE.NoColorSpace;
+
+// normalize a GLB: centered on x/z, base at y=0, scaled to a height (h) or width (w)
+function fit(src, { h, w }) {
+  const o = src.clone ? src.clone(true) : src;
+  const box = new THREE.Box3().setFromObject(o), size = box.getSize(new THREE.Vector3());
+  const s = h ? h / size.y : w / Math.max(size.x, size.z);
+  o.scale.multiplyScalar(s);
+  const b2 = new THREE.Box3().setFromObject(o), c = b2.getCenter(new THREE.Vector3());
+  o.position.sub(new THREE.Vector3(c.x, b2.min.y, c.z));
+  const g = new THREE.Group(); g.add(o); return g;
+}
+function softenMaterials(o, { rough = 1, metal = 0 } = {}) {
+  o.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true;
+    const mats = Array.isArray(m.material) ? m.material : [m.material];
+    mats.forEach(mt => { mt.roughness = rough; mt.metalness = metal; mt.metalnessMap = null; mt.roughnessMap = null; mt.envMapIntensity = 0; }); } });
+}
+
+// ---------- sky: the two fal skies on a mirrored cylinder, cross-faded at dawn ----------
+const skyMat = new THREE.ShaderMaterial({
+  uniforms: { tN: { value: skyN }, tD: { value: skyD }, uDawn: { value: 0 }, uTime: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
+  fragmentShader: `uniform sampler2D tN, tD; uniform float uDawn, uTime; varying vec2 vUv;
+    void main(){ float u = vUv.x * 3. + uTime * .002; u = 1. - abs(mod(u, 2.) - 1.);
+      vec2 uv = vec2(u, clamp(vUv.y, .002, .998));
+      vec3 n = texture2D(tN, uv).rgb, d = texture2D(tD, uv).rgb;
+      n = pow(n, vec3(1.3)) * vec3(.45, .66, .95);
+      vec3 c = mix(n, d * .85, uDawn);
+      gl_FragColor = vec4(c, 1.);
+      #include <colorspace_fragment>
+    }`,
+  side: THREE.BackSide, depthWrite: false, fog: false,
+});
+const sky = new THREE.Mesh(new THREE.CylinderGeometry(1500, 1500, 2100, 72, 1, true), skyMat);
+sky.renderOrder = -10;
+scene.add(sky);
+
+// ---------- particles: one additive pool (sparks, motes), one normal pool (shadow smoke) ----------
+class Pool {
+  constructor(n, additive) {
+    this.n = n; this.i = 0;
+    this.p = new Float32Array(n * 3); this.v = new Float32Array(n * 3); this.c = new Float32Array(n * 3);
+    this.life = new Float32Array(n); this.max = new Float32Array(n); this.size = new Float32Array(n); this.a = new Float32Array(n);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(this.p, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(this.c, 3));
+    g.setAttribute('size', new THREE.BufferAttribute(this.size, 1));
+    g.setAttribute('alpha', new THREE.BufferAttribute(this.a, 1));
+    this.mat = new THREE.ShaderMaterial({
+      uniforms: { uScale: { value: innerHeight * .5 } },
+      vertexShader: `attribute float size, alpha; attribute vec3 color; varying vec3 vC; varying float vA; uniform float uScale;
+        void main(){ vC = color; vA = alpha; vec4 mv = modelViewMatrix * vec4(position,1.);
+          gl_PointSize = size * uScale / -mv.z; gl_Position = projectionMatrix * mv; }`,
+      fragmentShader: `varying vec3 vC; varying float vA;
+        void main(){ float d = length(gl_PointCoord - .5) * 2.; float a = ${additive ? 'pow(max(1. - d, 0.), 1.8)' : 'smoothstep(1., .2, d) * .8'};
+          gl_FragColor = vec4(vC, a * vA); }`,
+      transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+    });
+    this.points = new THREE.Points(g, this.mat); this.points.frustumCulled = false; scene.add(this.points);
+  }
+  emit(x, y, z, vx, vy, vz, life, size, col) {
+    const i = this.i = (this.i + 1) % this.n, k = i * 3;
+    this.p[k] = x; this.p[k + 1] = y; this.p[k + 2] = z; this.v[k] = vx; this.v[k + 1] = vy; this.v[k + 2] = vz;
+    this.c[k] = col.r; this.c[k + 1] = col.g; this.c[k + 2] = col.b; this.life[i] = life; this.max[i] = life; this.size[i] = size;
+  }
+  update(dt, t, drag = 1.2) {
+    const f = Math.exp(-drag * dt);
+    for (let i = 0; i < this.n; i++) {
+      if (this.life[i] <= 0) { this.a[i] = 0; continue; }
+      this.life[i] -= dt; const k = i * 3, r = this.life[i] / this.max[i];
+      this.v[k] *= f; this.v[k + 2] *= f; this.v[k + 1] = this.v[k + 1] * f + 0.12 * dt;
+      this.p[k] += (this.v[k] + Math.sin(t * 1.7 + i) * .15) * dt; this.p[k + 1] += this.v[k + 1] * dt; this.p[k + 2] += this.v[k + 2] * dt;
+      this.a[i] = Math.min(1, (1 - r) * 6) * Math.min(1, r * 2.5) * (.7 + .3 * Math.sin(t * 9 + i * 7.1));
+    }
+    const at = this.points.geometry.attributes;
+    at.position.needsUpdate = at.color.needsUpdate = at.size.needsUpdate = at.alpha.needsUpdate = true;
+  }
+}
+const glow = new Pool(3500, true), smoke = new Pool(900, false);
+const GOLD = new THREE.Color(1.6, 1.05, .45), GOLD2 = new THREE.Color(1.4, .8, .3), DARK = new THREE.Color(.03, .02, .06), VIOLET = new THREE.Color(.9, .5, 1.6);
+
+// ---------- cloud sea: fal cloud atlas on camera-facing instanced quads ----------
+const CLOUDS = 260;
+const cg = new THREE.InstancedBufferGeometry().copy(new THREE.PlaneGeometry(1, 1));
+const cOff = new Float32Array(CLOUDS * 3), cScale = new Float32Array(CLOUDS * 2), cCell = new Float32Array(CLOUDS);
+for (let i = 0; i < CLOUDS; i++) {
+  const far = i < 200;
+  const x = (rand() - .5) * (far ? 900 : 260), z = 60 - rand() * (far ? 700 : 260), y = far ? -34 - rand() * 30 : -20 - rand() * 14;
+  cOff.set([x, y, z], i * 3); const s = far ? 40 + rand() * 70 : 18 + rand() * 26; cScale.set([s, s * (.45 + rand() * .2)], i * 2); cCell[i] = Math.floor(rand() * 3);
+}
+cg.setAttribute('iOff', new THREE.InstancedBufferAttribute(cOff, 3));
+cg.setAttribute('iScale', new THREE.InstancedBufferAttribute(cScale, 2));
+cg.setAttribute('iCell', new THREE.InstancedBufferAttribute(cCell, 1));
+cg.instanceCount = CLOUDS;
+const cloudMat = new THREE.ShaderMaterial({
+  uniforms: { tC: { value: cloudT }, uFog: { value: NIGHT.fog.clone() }, uLit: { value: new THREE.Color(0x1f4c66) }, uDark: { value: new THREE.Color(0x05192a) },
+    uDensity: { value: .006 }, uTime: { value: 0 }, uGlow: { value: 0 } },
+  vertexShader: `attribute vec3 iOff; attribute vec2 iScale; attribute float iCell; uniform float uTime; varying vec2 vUv; varying float vDepth;
+    void main(){ vec3 o = iOff + vec3(sin(uTime * .05 + iOff.z) * 4., 0., 0.);
+      vec4 mv = modelViewMatrix * vec4(o, 1.); mv.xy += position.xy * iScale;
+      float c = iCell; vUv = (uv + vec2(mod(c, 2.), 1. - floor(c / 2.))) * .5; vUv.y = vUv.y; vDepth = -mv.z;
+      gl_Position = projectionMatrix * mv; }`,
+  fragmentShader: `uniform sampler2D tC; uniform vec3 uFog, uLit, uDark; uniform float uDensity, uGlow; varying vec2 vUv; varying float vDepth;
+    void main(){ float l = texture2D(tC, vUv).r; float a = smoothstep(.0, .75, l) * .8;
+      vec3 col = mix(uDark, uLit, .35 + .65 * l) + uGlow * vec3(.3,.18,.05) * l;
+      float f = 1. - exp(-pow(uDensity * vDepth, 2.)); col = mix(col, uFog, f * .85);
+      gl_FragColor = vec4(col, a * .9); if (gl_FragColor.a < .01) discard;
+      #include <colorspace_fragment>
+    }`,
+  transparent: true, depthWrite: false,
+});
+const clouds = new THREE.Mesh(cg, cloudMat); clouds.frustumCulled = false; clouds.renderOrder = -5; if (!Q.has('noclouds')) scene.add(clouds);
+
+// ---------- islands ----------
+const islandProto = fit(islandG.scene, { w: 1 });
+softenMaterials(islandProto);
+islandProto.traverse(m => { if (m.isMesh) { m.material.color.setRGB(.9, .95, .85); m.castShadow = false; } });
+const islandLo = fit(islandLoG.scene, { w: 1 });
+softenMaterials(islandLo);
+islandLo.traverse(m => { if (m.isMesh) { m.material.color.setRGB(.9, .95, .85); m.castShadow = false; } });
+const down = new THREE.Raycaster(); down.ray.direction.set(0, -1, 0);
+function topOf(obj, x = 0, z = 0) {
+  obj.updateMatrixWorld(true); const wp = obj.getWorldPosition(new THREE.Vector3());
+  down.ray.origin.set(wp.x + x, wp.y + 1000, wp.z + z); const h = down.intersectObject(obj, true)[0];
+  return h ? h.point.y : wp.y;
+}
+function makeIsland(d, x, top, z, rotY = 0, proto = islandProto) {
+  const g = proto.clone(true); g.scale.setScalar(d); g.rotation.y = rotY; g.position.set(x, 0, z); scene.add(g);
+  g.position.y = top - topOf(g); g.updateMatrixWorld(true); return g;
+}
+
+// level: start, four islands held by shadows, the beacon island, the lighthouse beyond
+const LEVEL = [
+  { x: 0, y: 0, z: 0, d: 10, n: 0 },
+  { x: 1.5, y: .6, z: -17, d: 10.5, n: 3 },
+  { x: -3.5, y: 1.3, z: -33, d: 11, n: 4 },
+  { x: 2.5, y: .7, z: -50, d: 12, n: 5 },
+  { x: -.5, y: 1.6, z: -67, d: 12.5, n: 6 },
+  { x: 0, y: 2.2, z: -83, d: 10, n: 0, beacon: true },
+];
+const walkable = [];
+const islands = LEVEL.map((L, i) => {
+  const mesh = makeIsland(L.d, L.x, L.y, L.z, rand() * 6.28);
+  walkable.push(mesh);
+  const light = new THREE.PointLight(0xffb85a, 0, L.d * 1.3, 1.6); light.position.set(L.x, L.y + 2.2, L.z); scene.add(light);
+  // a warm glow spreading over the grass once the island is lit
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(L.d * .5, 48), new THREE.ShaderMaterial({
+    uniforms: { uA: { value: 0 }, uR: { value: 0 }, uTime: { value: 0 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
+    fragmentShader: `uniform float uA, uR, uTime; varying vec2 vUv;
+      void main(){ float d = length(vUv - .5) * 2.; float edge = smoothstep(uR, uR - .25, d);
+        float ring = smoothstep(.12, 0., abs(d - uR)) * step(.01, uR) * (1. - smoothstep(.9, 1., uR));
+        vec3 c = vec3(1., .62, .22) * (edge * pow(1. - d * .8, 2.) * .3 + ring * .8);
+        gl_FragColor = vec4(c * uA, 1.); }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4,
+  }));
+  disc.rotation.x = -Math.PI / 2; disc.position.set(L.x, L.y + .06, L.z); scene.add(disc);
+  return { ...L, i, mesh, light, disc, cleared: L.n === 0, litT: L.n === 0 ? 1 : 0, shadows: [], ferns: [] };
+});
+
+// stepping stones between islands, rising when the island before them is lit
+const bridges = [];
+for (let i = 0; i < islands.length - 1; i++) {
+  const A = islands[i], B = islands[i + 1];
+  const a = new THREE.Vector3(A.x, A.y, A.z), b = new THREE.Vector3(B.x, B.y, B.z), dir = b.clone().sub(a);
+  const len = Math.hypot(dir.x, dir.z); dir.y = 0; dir.normalize();
+  const s0 = A.d * .5 - .9, s1 = len - B.d * .5 + .9, n = Math.ceil((s1 - s0) / 1.55);
+  const stones = [];
+  for (let k = 0; k <= n; k++) {
+    const t = s0 + (s1 - s0) * k / n, f = t / len;
+    const p = a.clone().addScaledVector(dir, t); const top = lerp(A.y, B.y, f) - .05;
+    const side = Math.sin(k * 1.9 + i) * .35;
+    const st = makeIsland(2.3 + rand() * .4, p.x + dir.z * side, top, p.z - dir.x * side, rand() * 6.28, islandLo);
+    st.userData = { top: st.position.y, delay: k * .12 };
+    st.visible = false; stones.push(st);
+  }
+  bridges.push({ stones, risen: false, t: 0 });
+}
+function raiseBridge(i, instant) {
+  const B = bridges[i]; if (!B || B.risen) return; B.risen = true; B.t = instant ? 99 : 0;
+  B.stones.forEach(s => { s.visible = true; if (!instant) s.position.y = s.userData.top - 7; });
+  if (!instant) sfx('bridge', .8);
+}
+
+// far islands, some upside down like the floating rocks hanging in the video's sky
+const farIslands = [];
+for (let i = 0; i < 20; i++) {
+  const side = i % 2 ? 1 : -1, z = 10 - rand() * 330, x = side * (40 + rand() * 130), up = rand() < .3;
+  const g = islandLo.clone(true); g.scale.setScalar(5 + rand() * 16);
+  g.position.set(x, up ? 26 + rand() * 30 : -14 + rand() * 22, z); g.rotation.set(up ? Math.PI : 0, rand() * 6.28, (rand() - .5) * .2);
+  g.traverse(m => { if (m.isMesh) { m.castShadow = false; } });
+  scene.add(g); farIslands.push(g);
+}
+
+// ---------- lighthouse ----------
+const lighthouse = fit(lighthouseG.scene, { h: 66 });
+softenMaterials(lighthouse);
+lighthouse.traverse(m => { if (m.isMesh) m.castShadow = false; });
+lighthouse.position.set(0, -18, -190);
+scene.add(lighthouse);
+const lampPos = new THREE.Vector3(0, -18 + 66 * .86, -190);
+const lamp = new THREE.Mesh(new THREE.SphereGeometry(1.6, 24, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 2.2, 1.1), fog: false }));
+lamp.position.copy(lampPos); scene.add(lamp);
+const lampLight = new THREE.PointLight(0xffc070, 0, 260, 1.1); lampLight.position.copy(lampPos); scene.add(lampLight);
+// god rays fanning out of the lamp
+const rays = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), new THREE.ShaderMaterial({
+  uniforms: { uA: { value: 0 }, uTime: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
+  fragmentShader: `uniform float uA, uTime; varying vec2 vUv;
+    float n(float x){ return fract(sin(x * 91.7) * 4375.85); }
+    float vn(float x){ float i = floor(x), f = fract(x); return mix(n(i), n(i + 1.), smoothstep(0., 1., f)); }
+    void main(){ vec2 p = vUv - .5; float r = length(p) * 2., a = atan(p.y, p.x);
+      float s = pow(vn(a * 7. + uTime * .05), 3.) * .9 + pow(vn(a * 17. - uTime * .03), 4.) * .6;
+      float fall = exp(-r * 2.6); float core = exp(-r * 18.) * 2.5 + exp(-r * 6.) * .6;
+      vec3 c = vec3(1., .78, .45) * (s * fall * .55 + core);
+      gl_FragColor = vec4(c * uA, 1.); }`,
+  transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+}));
+rays.position.copy(lampPos); scene.add(rays);
+const beaconRing = new THREE.Mesh(new THREE.RingGeometry(1.1, 1.35, 64), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.4, .9, .4), transparent: true, opacity: .0, blending: THREE.AdditiveBlending, depthWrite: false }));
+beaconRing.rotation.x = -Math.PI / 2; const BEACON = islands[islands.length - 1];
+beaconRing.position.set(BEACON.x, BEACON.y + .08, BEACON.z); scene.add(beaconRing);
+
+// ---------- ferns: fal atlas on crossed cards, dark and curled until the island is lit ----------
+const fernMat = new THREE.MeshStandardMaterial({ map: fernT, alphaTest: .45, side: THREE.DoubleSide, roughness: 1 });
+const fernMeshes = [0, 1, 2, 3].map(cell => {
+  const p1 = new THREE.PlaneGeometry(1, 1), p2 = p1.clone().rotateY(Math.PI / 2);
+  const g = new THREE.BufferGeometry();
+  const pos = [...p1.attributes.position.array, ...p2.attributes.position.array];
+  const nrm = [...p1.attributes.normal.array, ...p2.attributes.normal.array].map((v, k) => k % 3 === 1 ? 1 : 0);
+  const uv = [...p1.attributes.uv.array, ...p2.attributes.uv.array].map((v, k) => k % 2 === 0 ? (v + cell % 2) * .5 : (v + 1 - Math.floor(cell / 2)) * .5);
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.translate(0, .5, 0);
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex([...p1.index.array, ...p1.index.array.map(v => v + 4)]);
+  const m = new THREE.InstancedMesh(g, fernMat, 160); m.count = 0; m.receiveShadow = false; m.castShadow = true;
+  m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(160 * 3), 3); scene.add(m); return m;
+});
+const ferns = [];
+islands.forEach(I => {
+  const n = I.beacon ? 12 : 18;
+  for (let k = 0; k < n; k++) {
+    const a = rand() * 6.28, r = I.d * .5 * (.55 + rand() * .38), x = I.x + Math.cos(a) * r, z = I.z + Math.sin(a) * r;
+    down.ray.origin.set(x, I.y + 20, z); const hit = down.intersectObject(I.mesh, true)[0]; if (!hit || hit.point.y < I.y - .5) continue;
+    const cell = [0, 0, 1, 2, 3][Math.floor(rand() * 5)], m = fernMeshes[cell], idx = m.count++;
+    const f = { m, idx, x, y: hit.point.y - .05, z, rot: rand() * 6.28, size: (cell === 0 ? 1.4 : 1.05) * (.7 + rand() * .5), island: I };
+    ferns.push(f); I.ferns.push(f);
+  }
+});
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _e = new THREE.Euler();
+function updateFerns(t) {
+  for (const f of ferns) {
+    const lit = f.island.litT, s = f.size * (.45 + .55 * ease(lit));
+    _e.set(Math.sin(t * 1.3 + f.x) * .05, f.rot, Math.sin(t * 1.1 + f.z) * .06);
+    _m.compose(_p.set(f.x, f.y, f.z), _q.setFromEuler(_e), _s.set(s, s * (.6 + .4 * lit), s)); f.m.setMatrixAt(f.idx, _m);
+    const c = .18 + .82 * lit; f.m.instanceColor.setXYZ(f.idx, c * .8, c, c * .85);
+  }
+  fernMeshes.forEach(m => { m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; });
+}
+
+// ---------- shadow creatures ----------
+const shadowProto = fit(shadowG.scene, { h: 1 });
+shadowProto.traverse(m => { if (m.isMesh) { m.castShadow = true; m.material.roughness = 1; m.material.metalness = 0; m.material.metalnessMap = null; } });
+const eyeMat = new THREE.SpriteMaterial({ color: new THREE.Color(2.2, 1.1, 3.2), blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+const shadows = [];
+islands.forEach(I => {
+  for (let k = 0; k < I.n; k++) {
+    const a = (k / I.n) * 6.28 + rand() * .6 + 1.2, r = I.d * .5 * (.45 + rand() * .25);
+    const g = shadowProto.clone(true); g.traverse(m => { if (m.isMesh) { m.material = m.material.clone(); m.material.transparent = true; } });
+    const h = .85 + rand() * .45 + (k === 5 ? .5 : 0); g.scale.setScalar(h);
+    const x = I.x + Math.cos(a) * r, z = I.z + Math.sin(a) * r;
+    down.ray.origin.set(x, I.y + 20, z); const hit = down.intersectObject(I.mesh, true)[0];
+    g.position.set(x, hit ? hit.point.y : I.y, z); scene.add(g);
+    const eyes = [-1, 1].map(sx => { const e = new THREE.Sprite(eyeMat); e.scale.setScalar(.12); e.position.set(sx * .13, .62, .42); g.add(e); return e; });
+    const S = { g, eyes, I, home: g.position.clone(), h, alive: true, dying: -1, hitCd: 0, phase: rand() * 6 };
+    shadows.push(S); I.shadows.push(S);
+  }
+  I.total = I.shadows.length;
+});
+
+// ---------- hero + lantern ----------
+const hero = new THREE.Group(); scene.add(hero);
+const heroModel = new THREE.Group(); heroModel.add(heroG.scene); // rigged by Meshy at 1.1 m, feet at y=0
+heroModel.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; m.material.roughness = .9; m.material.metalness = 0; } });
+hero.add(heroModel);
+const mixer = new THREE.AnimationMixer(heroModel.children[0]);
+const clips = {}; heroG.animations.forEach(c => clips[c.name] = mixer.clipAction(c));
+['Skill_01', 'Victory_Cheer'].forEach(n => { clips[n].setLoop(THREE.LoopOnce); clips[n].clampWhenFinished = true; });
+let current = null;
+function play(name, fade = .25) {
+  const a = clips[name]; if (!a || current === a) return;
+  a.reset().play(); if (current) current.crossFadeTo(a, fade, false); current = a;
+}
+play('Idle');
+let rightHand = null; heroModel.traverse(o => { if (o.isBone && /right.?hand$/i.test(o.name)) rightHand = o; });
+if (!rightHand) heroModel.traverse(o => { if (!rightHand && o.isBone && /hand/i.test(o.name) && /r/i.test(o.name)) rightHand = o; });
+const lantern = fit(lanternG.scene, { h: .3 });
+softenMaterials(lantern, { rough: .45, metal: .6 }); scene.add(lantern);
+const flame = new THREE.Mesh(new THREE.SphereGeometry(.045, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 2.6, 1.2) }));
+scene.add(flame);
+const lanternLight = new THREE.PointLight(LANTERN, 10, 16, 1.5);
+lanternLight.castShadow = true; lanternLight.shadow.mapSize.set(1024, 1024); lanternLight.shadow.bias = -.004; lanternLight.shadow.camera.near = .05;
+scene.add(lanternLight);
+const flameGlow = new THREE.Sprite(new THREE.SpriteMaterial({ color: new THREE.Color(1.3, .8, .35), blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+  map: (() => { const n = 64, d = new Uint8Array(n * n * 4); for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const r = Math.hypot(x - n / 2 + .5, y - n / 2 + .5) / (n / 2); const a = Math.pow(Math.max(0, 1 - r), 2.2); d.set([255, 255, 255, a * 255], (y * n + x) * 4); } const t = new THREE.DataTexture(d, n, n); t.needsUpdate = true; return t; })() }));
+flameGlow.scale.setScalar(1.1); scene.add(flameGlow);
+eyeMat.map = flameGlow.material.map;
+
+// the expanding ring of light (the video's key moment)
+const ringMat = new THREE.ShaderMaterial({
+  uniforms: { uR: { value: 0 }, uA: { value: 0 }, uTime: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
+  fragmentShader: `uniform float uR, uA, uTime; varying vec2 vUv;
+    float n(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5); }
+    void main(){ vec2 p = (vUv - .5) * 2.; float d = length(p), a = atan(p.y, p.x);
+      float wob = .03 * sin(a * 9. + uTime * 6.) + .02 * sin(a * 23. - uTime * 9.);
+      float band = smoothstep(.09, 0., abs(d - uR - wob)) ;
+      float flames = band * (.6 + .6 * pow(abs(sin(a * 14. + uTime * 4.)), 6.));
+      float fill = smoothstep(uR, 0., d) * .35 * step(d, uR);
+      vec3 c = vec3(1.25, .82, .35) * (flames * 1.6 + fill);
+      gl_FragColor = vec4(c * uA, 1.); }`,
+  transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+});
+const ring = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), ringMat); ring.rotation.x = -Math.PI / 2; ring.visible = false; scene.add(ring);
+const chargeAura = new THREE.Sprite(new THREE.SpriteMaterial({ map: flameGlow.material.map, color: new THREE.Color(1.2, .75, .3), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0 }));
+scene.add(chargeAura);
+
+// ---------- audio: fal / ElevenLabs sounds and music ----------
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+const master = AC.createGain(); master.gain.value = .9; master.connect(AC.destination);
+const buffers = {};
+['pulse', 'dissolve', 'step', 'wind', 'bridge', 'ignite', 'whisper', 'charge', 'music_night', 'music_dawn'].forEach(n =>
+  fetch(`assets/audio/${n}.mp3`).then(r => r.arrayBuffer()).then(b => AC.decodeAudioData(b)).then(d => { buffers[n] = d; startLoops(); }).catch(() => {}));
+function sfx(name, vol = 1, rate = 1) {
+  const b = buffers[name]; if (!b || AC.state !== 'running') return null;
+  const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = b; s.playbackRate.value = rate; g.gain.value = vol;
+  s.connect(g).connect(master); s.start(); return { s, g };
+}
+const loops = {};
+function loop(name, vol) {
+  if (loops[name] || !buffers[name] || AC.state !== 'running') return;
+  const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = buffers[name]; s.loop = true; g.gain.value = 0;
+  g.gain.linearRampToValueAtTime(vol, AC.currentTime + 2); s.connect(g).connect(master); s.start(); loops[name] = { s, g };
+}
+function startLoops() { if (S.phase === 'title' || S.phase === 'end') return; loop('wind', .35); loop('whisper', 0); if (!S.dawn) loop('music_night', .55); }
+function fadeLoop(name, v, t = 1.5) { const l = loops[name]; if (l) { l.g.gain.cancelScheduledValues(AC.currentTime); l.g.gain.setValueAtTime(l.g.gain.value, AC.currentTime); l.g.gain.linearRampToValueAtTime(v, AC.currentTime + t); } }
+
+// ---------- input ----------
+const keys = new Set();
+addEventListener('keydown', e => { keys.add(e.code); if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault(); if (AC.state !== 'running') AC.resume().then(startLoops); });
+addEventListener('keyup', e => keys.delete(e.code));
+function input() {
+  const pad = navigator.getGamepads?.()[0];
+  const ax = pad ? pad.axes[0] : 0, ay = pad ? pad.axes[1] : 0;
+  return {
+    x: (keys.has('ArrowRight') || keys.has('KeyD') ? 1 : 0) - (keys.has('ArrowLeft') || keys.has('KeyA') ? 1 : 0) + (Math.abs(ax) > .2 ? ax : 0),
+    z: (keys.has('ArrowDown') || keys.has('KeyS') ? 1 : 0) - (keys.has('ArrowUp') || keys.has('KeyW') ? 1 : 0) + (Math.abs(ay) > .2 ? ay : 0),
+    act: keys.has('Space') || !!pad?.buttons[0]?.pressed,
+    start: keys.has('Enter') || keys.has('Space') || !!pad?.buttons[9]?.pressed || !!pad?.buttons[0]?.pressed,
+    restart: keys.has('KeyR') || !!pad?.buttons[9]?.pressed,
+  };
+}
+
+// ---------- state ----------
+const S = { phase: 'title', pos: hero.position, vel: new THREE.Vector3(), t: 0, energy: 1, charge: 0, charging: false, pulse: null,
+  island: 0, lastSafe: 0, cleared: 0, dawn: 0, dawnT: -1, shake: 0, stepT: 0, fadeT: -1, facing: Math.PI, endT: 0 };
+const $ = id => document.getElementById(id);
+function heightAt(x, z, fromY) {
+  down.ray.origin.set(x, fromY + 1.2, z); down.far = 4;
+  const h = down.intersectObjects(walkable, true)[0]; down.far = Infinity; return h ? h.point.y : null;
+}
+function islandAt(x, z) { let best = -1, bd = 1e9; islands.forEach((I, i) => { const d = Math.hypot(x - I.x, z - I.z); if (d < I.d * .5 && d < bd) { bd = d; best = i; } }); return best; }
+function placeAt(i) { const I = islands[i]; S.pos.set(I.x, 0, I.z + I.d * .2); S.pos.y = heightAt(S.pos.x, S.pos.z, I.y + 2) ?? I.y; }
+function resetGame() {
+  islands.forEach((I, i) => { I.cleared = I.total === 0; I.litT = I.cleared ? 1 : 0; });
+  bridges.forEach(B => { B.risen = false; B.stones.forEach(s => { s.visible = false; const k = walkable.indexOf(s); if (k >= 0) walkable.splice(k, 1); }); });
+  shadows.forEach(s => { s.alive = true; s.dying = -1; s.g.visible = true; s.g.position.copy(s.home); s.g.scale.setScalar(s.h); s.g.traverse(m => { if (m.isMesh) m.material.opacity = 1; }); });
+  raiseBridge(0, true);
+  Object.assign(S, { energy: 1, charge: 0, charging: false, pulse: null, island: 0, lastSafe: 0, cleared: 0, dawn: 0, dawnT: -1, fadeT: -1, facing: Math.PI, endT: 0, snap: true });
+  const start = +(Q.get('island') || 0);
+  for (let i = 1; i < Math.min(start, 5); i++) clearIsland(islands[i], true);
+  placeAt(Math.min(start, 5)); S.lastSafe = Math.min(start, 5);
+  $('dots').querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', islands[i + 1].cleared));
+  $('end').style.opacity = 0; play('Idle', .1);
+  if (S.phase !== 'title') { fadeLoop('music_dawn', 0, 1); if (loops.music_dawn) { loops.music_dawn.s.stop(); delete loops.music_dawn; } loop('music_night', .55); fadeLoop('music_night', .55); }
+}
+function clearIsland(I, instant) {
+  if (I.cleared) return; I.cleared = true; S.cleared = islands.filter(x => x.cleared && x.total > 0).length;
+  I.shadows.forEach(s => { s.alive = false; s.g.visible = false; });
+  if (instant) I.litT = 1;
+  raiseBridge(I.i, instant);
+  $('dots').querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', islands[i + 1].cleared));
+  if (!instant) for (let k = 0; k < 160; k++) { const a = rand() * 6.28, r = I.d * .5 * (.5 + rand() * .5);
+    glow.emit(I.x + Math.cos(a) * r, I.y + .2 + rand() * .5, I.z + Math.sin(a) * r, 0, .3 + rand() * .8, 0, 2 + rand() * 2.5, .1 + rand() * .12, rand() < .5 ? GOLD : GOLD2); }
+}
+const startPhase = () => { S.phase = 'play'; $('title').style.opacity = 0; $('hud').style.opacity = 1; AC.resume().then(startLoops); };
+resetGame();
+if (Q.has('autostart')) startPhase();
+if (Q.has('dawn')) { startPhase(); for (let i = 1; i < 5; i++) clearIsland(islands[i], true); placeAt(5); ignite(); S.dawnT = 99; }
+
+window.__dbg = { camera, scene, renderer, hero, islands, lantern, flame, heroModel, sky };
+window.__game = { get state() {
+  const I = islands[S.island];
+  let near = null, nd = 1e9;
+  shadows.forEach(s => { if (!s.alive || s.dying >= 0) return; const d = Math.hypot(s.g.position.x - S.pos.x, s.g.position.z - S.pos.z); if (d < nd) { nd = d; near = s; } });
+  const next = islands.find(x => !x.cleared) || BEACON;
+  return { phase: S.phase, x: S.pos.x, y: S.pos.y, z: S.pos.z, island: S.island, energy: +S.energy.toFixed(2), charge: +S.charge.toFixed(2), charging: S.charging,
+    cleared: S.cleared, shadowsHere: I ? I.shadows.filter(s => s.alive && s.dying < 0).length : 0,
+    nearest: near ? { x: near.g.position.x, z: near.g.position.z, dist: +nd.toFixed(2) } : null,
+    target: { x: next.x, z: next.z, island: next.i }, dawn: +S.dawn.toFixed(2), t: +S.t.toFixed(2) };
+} };
+
+// ---------- the pulse ----------
+function firePulse() {
+  const c = S.charge; S.charging = false; S.charge = 0;
+  const cost = .18 + .22 * c;
+  if (S.energy < cost) { sfx('charge', .3, .6); for (let k = 0; k < 14; k++) glow.emit(lantern.position.x, lantern.position.y, lantern.position.z, (rand() - .5), rand(), (rand() - .5), .6, .06, GOLD2); return; }
+  S.energy -= cost;
+  const R = 3.2 + 5 * c;
+  S.pulse = { t: 0, R, x: S.pos.x, y: S.pos.y, z: S.pos.z, dur: .55 + .25 * c };
+  sfx('pulse', .9, 1.05 - c * .1); S.shake = .25 + .3 * c;
+  play('Skill_01', .12); S.castT = 1.1;
+  const I = islands[S.island];
+  if (I?.beacon && Math.hypot(S.pos.x - I.x, S.pos.z - I.z) < 2.6 && S.dawnT < 0) ignite();
+  for (let k = 0; k < 90 + 120 * c; k++) { const a = rand() * 6.28, sp = R * (1.2 + rand() * .8);
+    glow.emit(S.pos.x + Math.cos(a) * .3, S.pos.y + .1 + rand() * .6, S.pos.z + Math.sin(a) * .3, Math.cos(a) * sp, .3 + rand() * 1.4, Math.sin(a) * sp, 1.2 + rand() * 1.6, .08 + rand() * .1, rand() < .6 ? GOLD : GOLD2); }
+}
+function ignite() {
+  S.dawnT = 0; sfx('ignite', 1); fadeLoop('music_night', 0, 3); fadeLoop('whisper', 0, 1);
+  const d = sfx('music_dawn', 0); if (d) { d.g.gain.linearRampToValueAtTime(.7, AC.currentTime + 2.5); loops.music_dawn = d; }
+}
+
+// ---------- frame ----------
+const clock = new THREE.Clock();
+const camPos = new THREE.Vector3(0, 6, 10), camLook = new THREE.Vector3(), tmp = new THREE.Vector3();
+camera.position.copy(camPos);
+const MANUAL = Q.has('manual'); let simT = 0;
+function frame(forced) {
+  const dt = forced ?? Math.min(clock.getDelta(), 1 / 20); simT += dt; const now = simT;
+  const inp = input();
+  if (S.phase === 'title' && inp.start && now > .3) startPhase();
+  if (S.phase === 'end' && inp.restart) { S.phase = 'play'; resetGame(); $('hud').style.opacity = 1; }
+
+  let moving = false;
+  if (S.phase === 'play') {
+    S.t += dt;
+    // walk, constrained to the islands and the stones (no fall: the edge stops her)
+    let mx = inp.x, mz = inp.z; const ml = Math.hypot(mx, mz); if (ml > 1) { mx /= ml; mz /= ml; }
+    const speed = S.charging ? 1.3 : 2.9;
+    S.vel.x = THREE.MathUtils.damp(S.vel.x, mx * speed, 9, dt); S.vel.z = THREE.MathUtils.damp(S.vel.z, mz * speed, 9, dt);
+    const tryMove = (dx, dz) => {
+      const nx = S.pos.x + dx, nz = S.pos.z + dz, h = heightAt(nx, nz, S.pos.y);
+      if (h !== null && h - S.pos.y < .45 && S.pos.y - h < 1.2) { S.pos.x = nx; S.pos.z = nz; S.pos.y = THREE.MathUtils.damp(S.pos.y, h, 18, dt); return true; } return false;
+    };
+    if (!tryMove(S.vel.x * dt, S.vel.z * dt)) { if (!tryMove(S.vel.x * dt, 0)) S.vel.x = 0; if (!tryMove(0, S.vel.z * dt)) S.vel.z = 0; }
+    const sp = Math.hypot(S.vel.x, S.vel.z); moving = sp > .35 && ml > .1;
+    if (ml > .1) S.facing = Math.atan2(mx, mz);
+    hero.rotation.y = THREE.MathUtils.damp(hero.rotation.y, hero.rotation.y + ((S.facing - hero.rotation.y + Math.PI * 3) % (Math.PI * 2) - Math.PI), 10, dt);
+    S.stepT -= dt * sp; if (moving && S.stepT <= 0) { S.stepT = 1.15; sfx('step', .35, .9 + rand() * .2); }
+    const ii = islandAt(S.pos.x, S.pos.z); if (ii >= 0) { S.island = ii; if (islands[ii].cleared) S.lastSafe = ii; }
+
+    // lantern: hold to charge, release to pulse
+    if (inp.act && S.dawnT < 0) {
+      if (!S.charging) { S.charging = true; S.charge = 0; S.chargeSnd = sfx('charge', .5); }
+      S.charge = Math.min(1, S.charge + dt / 1.0);
+      if (rand() < .6) { const a = rand() * 6.28; glow.emit(lantern.position.x + Math.cos(a) * .8, lantern.position.y - .3, lantern.position.z + Math.sin(a) * .8, -Math.cos(a) * 1.2, .6, -Math.sin(a) * 1.2, .7, .07, GOLD); }
+    } else if (S.charging) firePulse();
+    if (!S.charging) S.energy = Math.min(1, S.energy + dt * .16);
+
+    // shadows: creep toward the light, sap it on contact, dissolve in the ring
+    let nearest = 1e9;
+    for (const s of shadows) {
+      if (!s.g.visible) continue;
+      const p = s.g.position;
+      if (s.dying >= 0) {
+        s.dying += dt; const k = s.dying / .9;
+        s.g.scale.setScalar(s.h * (1 + k * .3) * (1 - ease(Math.min(1, k)) * .95)); s.g.position.y += dt * .6;
+        s.g.traverse(m => { if (m.isMesh) m.material.opacity = 1 - k; });
+        if (k >= 1) { s.g.visible = false; const I = s.I; if (I.shadows.every(x => !x.g.visible)) { clearIsland(I); } }
+        continue;
+      }
+      const dx = S.pos.x - p.x, dz = S.pos.z - p.z, d = Math.hypot(dx, dz);
+      nearest = Math.min(nearest, d);
+      const onIsland = S.island === s.I.i;
+      let tx = s.home.x, tz = s.home.z, spd = .7;
+      if (onIsland && d < 7.5) { tx = S.pos.x; tz = S.pos.z; spd = .85 / Math.sqrt(s.h); }
+      const vx = tx - p.x, vz = tz - p.z, vl = Math.hypot(vx, vz);
+      if (vl > .95) { const nx = p.x + vx / vl * spd * dt, nz = p.z + vz / vl * spd * dt; const h = heightAt(nx, nz, p.y); if (h !== null) { p.x = nx; p.z = nz; p.y = THREE.MathUtils.damp(p.y, h, 10, dt); } }
+      s.g.rotation.y = Math.atan2(dx, dz);
+      const b = Math.sin(now * 3 + s.phase); s.g.scale.set(s.h * (1 + b * .04), s.h * (1 - b * .05), s.h * (1 + b * .04));
+      s.eyes.forEach(e => e.scale.setScalar(.12 * (Math.sin(now * .7 + s.phase * 3) > .97 ? .2 : 1)));
+      if (rand() < dt * 6) smoke.emit(p.x + (rand() - .5) * .6 * s.h, p.y + rand() * .8 * s.h, p.z + (rand() - .5) * .6 * s.h, 0, .25, 0, 1.6, .5 * s.h, DARK);
+      s.hitCd -= dt;
+      if (d < .85 && s.hitCd <= 0 && S.fadeT < 0) {
+        s.hitCd = 1.4; S.energy -= .3; S.shake = .35; sfx('dissolve', .5, .6);
+        const kx = dx / (d || 1), kz = dz / (d || 1); S.vel.x += kx * 6; S.vel.z += kz * 6;
+        for (let k = 0; k < 25; k++) smoke.emit(S.pos.x, S.pos.y + .6, S.pos.z, (rand() - .5) * 2, rand(), (rand() - .5) * 2, 1, .35, DARK);
+        if (S.energy <= 0) { S.energy = 0; S.fadeT = 0; $('fade').style.opacity = 1; }
+      }
+    }
+    if (loops.whisper) loops.whisper.g.gain.value = THREE.MathUtils.damp(loops.whisper.g.gain.value, S.dawnT < 0 ? clamp(1 - nearest / 9, 0, 1) * .5 : 0, 3, dt);
+
+    // the light went out: fade, wake on the last lit island
+    if (S.fadeT >= 0) { S.fadeT += dt; if (S.fadeT > .9 && S.fadeT - dt <= .9) { placeAt(S.lastSafe); S.snap = true; S.energy = 1; shadows.forEach(s => { if (s.alive && s.dying < 0) s.g.position.copy(s.home); }); }
+      if (S.fadeT > 1.3) { S.fadeT = -1; $('fade').style.opacity = 0; } }
+
+    // ending: the beacon ring, then dawn
+    beaconRing.material.opacity = islands.slice(1, 5).every(I => I.cleared) && S.dawnT < 0 ? .5 + .4 * Math.sin(now * 3) : 0;
+    if (S.dawnT >= 0) {
+      S.dawnT += dt; S.dawn = clamp((S.dawnT - .6) / 5, 0, 1);
+      if (S.dawnT > 2.2 && current !== clips.Victory_Cheer) play('Victory_Cheer', .4);
+      if (S.dawnT > 7 && S.phase === 'play') { S.phase = 'end'; $('end').style.opacity = 1; $('hud').style.opacity = 0; }
+    }
+  }
+  if (S.phase === 'end') S.dawnT += dt;
+
+  // pulse ring
+  if (S.pulse) {
+    const P = S.pulse; P.t += dt; const k = Math.min(1, P.t / P.dur), r = P.R * (1 - Math.pow(1 - k, 3));
+    ring.visible = true; ring.position.set(P.x, P.y + .07, P.z); ring.scale.setScalar(r + .5);
+    ringMat.uniforms.uR.value = r / (r + .5); ringMat.uniforms.uA.value = 1 - Math.pow(Math.max(0, (P.t - P.dur * .6) / (P.dur * 1.2)), 1.5);
+    for (const s of shadows) if (s.alive && s.dying < 0 && Math.hypot(s.g.position.x - P.x, s.g.position.z - P.z) < r + .4 * s.h) {
+      s.dying = 0; s.alive = false; sfx('dissolve', .7, .9 + rand() * .3);
+      const p = s.g.position; for (let q = 0; q < 70; q++) glow.emit(p.x + (rand() - .5) * .8, p.y + rand() * s.h, p.z + (rand() - .5) * .8, (rand() - .5) * 1.5, .5 + rand() * 1.5, (rand() - .5) * 1.5, 1.2 + rand() * 1.5, .07 + rand() * .09, rand() < .5 ? GOLD : VIOLET);
+      for (let q = 0; q < 30; q++) smoke.emit(p.x, p.y + rand() * s.h, p.z, (rand() - .5) * 2, rand() * 1.5, (rand() - .5) * 2, 1, .45 * s.h, DARK);
+    }
+    if (P.t > P.dur * 1.8) { S.pulse = null; ring.visible = false; }
+  }
+
+  // islands light up
+  islands.forEach(I => {
+    if (I.cleared && I.litT < 1) I.litT = Math.min(1, I.litT + dt / 2.2);
+    const l = ease(I.litT);
+    I.light.intensity = l * (I.beacon ? 4 : 7) * (1 - S.dawn * .5);
+    I.disc.material.uniforms.uA.value = (I.i === 0 ? .4 : 1) * l * (1 - S.dawn * .4); I.disc.material.uniforms.uR.value = Math.min(1, I.litT * 1.25);
+    if (I.cleared && rand() < dt * (S.dawn > 0 ? 4 : 10)) { const a = rand() * 6.28, r = I.d * .5 * (.6 + rand() * .4);
+      glow.emit(I.x + Math.cos(a) * r, I.y + rand() * .6, I.z + Math.sin(a) * r, 0, .2 + rand() * .3, 0, 2.5 + rand() * 2, .06 + rand() * .06, GOLD); }
+  });
+  bridges.forEach(B => { if (!B.risen) return; B.t += dt; B.stones.forEach(s => {
+    const k = clamp((B.t - s.userData.delay) / 1.1, 0, 1); s.position.y = s.userData.top - 7 * Math.pow(1 - k, 3);
+    if (k >= 1 && !walkable.includes(s)) walkable.push(s); }); });
+  updateFerns(now);
+
+  // hero animation + lantern in her right hand
+  mixer.update(dt);
+  if (S.castT > 0) { S.castT -= dt; if (S.castT <= 0 && S.dawnT < 0) current = null; }
+  if (!(S.castT > 0) && S.dawnT < 0) play(moving ? 'Walking_Woman' : 'Idle', .25);
+  if (clips.Walking_Woman) clips.Walking_Woman.timeScale = 1.15;
+  hero.updateMatrixWorld(true);
+  if (rightHand) rightHand.getWorldPosition(tmp); else tmp.set(S.pos.x + .3, S.pos.y + .6, S.pos.z);
+  const lift = S.charging ? S.charge * .25 : 0;
+  lantern.position.set(tmp.x, tmp.y - .3 + lift, tmp.z);
+  lantern.rotation.set(Math.sin(now * 2.2) * .08 - S.vel.z * .05, hero.rotation.y, Math.sin(now * 1.7) * .06 + S.vel.x * .05);
+  flame.position.set(tmp.x, tmp.y - .19 + lift, tmp.z);
+  flameGlow.position.copy(flame.position);
+  const flick = 1 + Math.sin(now * 13) * .05 + Math.sin(now * 23.7) * .04;
+  const pulseBoost = S.pulse ? Math.max(0, 1 - S.pulse.t / (S.pulse.dur * 1.5)) * 50 : 0;
+  lanternLight.position.copy(flame.position).y += .1;
+  lanternLight.intensity = (4 + 7 * S.energy + S.charge * 16 + pulseBoost) * flick * (1 - S.dawn * .6) * (S.fadeT >= 0 ? 0 : 1);
+  lanternLight.distance = 7 + 9 * S.energy + S.charge * 6 + (S.pulse ? S.pulse.R : 0);
+  flameGlow.scale.setScalar((.35 + .3 * S.energy + S.charge * .9) * flick);
+  chargeAura.position.copy(flame.position); chargeAura.scale.setScalar(.8 + S.charge * 1.6); chargeAura.material.opacity = S.charge * .45;
+  $('energy').style.opacity = .25 + .75 * S.energy; $('energy').style.transform = `scale(${.6 + .4 * S.energy + S.charge * .3})`;
+
+  // dawn: sky, fog, light, grade
+  const D = ease(S.dawn);
+  skyMat.uniforms.uDawn.value = D; grade.uniforms.uDawn.value = D;
+  scene.fog.color.copy(NIGHT.fog).lerp(DAWN.fog, D); scene.fog.density = lerp(.016, .0052, D);
+  scene.background.copy(NIGHT.sky).lerp(DAWN.sky, D);
+  hemi.color.copy(NIGHT.hemiTop).lerp(DAWN.hemiTop, D); hemi.groundColor.copy(NIGHT.hemiBot).lerp(DAWN.hemiBot, D); hemi.intensity = lerp(.55, .75, D);
+  sun.intensity = D * 1.8; sun.position.set(S.pos.x + 4, S.pos.y + 22, S.pos.z - 40); sun.target.position.copy(S.pos);
+  moon.intensity = .35 * (1 - D);
+  cloudMat.uniforms.uFog.value.copy(scene.fog.color); cloudMat.uniforms.uDensity.value = lerp(.0055, .0035, D);
+  cloudMat.uniforms.uLit.value.set(0x1f4c66).lerp(new THREE.Color(0xffd3a0), D); cloudMat.uniforms.uDark.value.set(0x05192a).lerp(new THREE.Color(0xa86a4a), D);
+  const igniteK = S.dawnT >= 0 ? clamp(S.dawnT / 1.2, 0, 1) : 0;
+  lamp.material.color.setRGB(1, .7, .35).multiplyScalar(.6 + 3.5 * igniteK + (S.dawnT < 0 ? Math.max(0, Math.sin(now * 1.3)) * .8 : 0));
+  lampLight.intensity = igniteK * 900;
+  rays.material.uniforms.uA.value = igniteK * (.35 + .3 * D); rays.lookAt(camera.position);
+  bloom.strength = lerp(.55, .6, D); bloom.threshold = lerp(.78, .88, D); renderer.toneMappingExposure = lerp(1.15, .78, D);
+  if (S.dawn > 0 && rand() < dt * 60) glow.emit(S.pos.x + (rand() - .5) * 60, S.pos.y + rand() * 30, S.pos.z - 10 - rand() * 60, 0, .1, 0, 5, .25 + rand() * .35, GOLD);
+
+  // camera: behind and above, like the video; at dawn it settles low to frame the lighthouse
+  const shake = S.shake > 0 ? (S.shake -= dt, S.shake) : 0;
+  const cd = clamp(Q.get('camd') ? +Q.get('camd') : 7.4, 3, 40);
+  const want = tmp.set(S.pos.x * .7, S.pos.y + cd * .36, S.pos.z + cd);
+  const look = new THREE.Vector3(S.pos.x * .85, S.pos.y + .9, S.pos.z - 5);
+  if (S.dawnT >= 0) { const k = ease(clamp((S.dawnT - .3) / 4, 0, 1)); want.lerp(new THREE.Vector3(S.pos.x, S.pos.y + 3.4, S.pos.z + 9.5), k); look.lerp(new THREE.Vector3(lampPos.x, S.pos.y + 9, lampPos.z), k); }
+  if (S.phase === 'title') { want.set(S.pos.x + Math.sin(now * .1) * 2, S.pos.y + 4.5, S.pos.z + 9); look.set(S.pos.x, S.pos.y + 1.5, S.pos.z - 10); }
+  if (S.snap) { camPos.copy(want); camLook.copy(look); S.snap = false; }
+  camPos.lerp(want, 1 - Math.exp(-3 * dt)); camLook.lerp(look, 1 - Math.exp(-4 * dt));
+  camera.position.copy(camPos); camera.position.x += (rand() - .5) * shake * .25; camera.position.y += (rand() - .5) * shake * .25;
+  camera.lookAt(camLook);
+  sky.position.set(camera.position.x, 120, camera.position.z);
+
+  glow.update(dt, now); smoke.update(dt, now, .8);
+  const tt = now; [skyMat, ringMat, cloudMat, rays.material].forEach(m => m.uniforms.uTime && (m.uniforms.uTime.value = tt));
+  grade.uniforms.uTime.value = now;
+  if (Q.has('nopost')) renderer.render(scene, camera); else composer.render();
+  if (!MANUAL) requestAnimationFrame(() => frame());
+}
+window.__step = (n = 1, dt = 1 / 30) => { for (let i = 0; i < n; i++) frame(dt); return window.__game.state; };
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
+  glow.mat.uniforms.uScale.value = smoke.mat.uniforms.uScale.value = innerHeight * .5;
+});
+camLook.set(0, 1, -10);
+const HIDE = (Q.get('hide') || '').split(',');
+const groups = { far: farIslands, ferns: fernMeshes, shadows: shadows.map(s => s.g), lighthouse: [lighthouse, lamp, rays], sky: [sky], hero: [hero], lantern: [lantern, flame, flameGlow, chargeAura],
+  glow: [glow.points, smoke.points], islands: islands.map(i => i.mesh), discs: islands.map(i => i.disc), stones: bridges.flatMap(b => b.stones), clouds: [clouds] };
+HIDE.forEach(h => (groups[h] || []).forEach(o => { o.visible = false; o.userData.hidden = true; }));
+frame();
+</script>
+</body>
+</html>

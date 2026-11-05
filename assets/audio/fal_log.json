@@ -1,0 +1,144 @@
+[
+ {
+  "endpoint": "fal-ai/elevenlabs/sound-effects/v2",
+  "name": "pulse",
+  "seconds": 4.1,
+  "arguments": {
+   "output_format": "mp3_44100_128",
+   "text": "Magical lantern light burst: a warm soft whoosh that blooms outward with a shimmering glassy chime and gentle sparkle tail, cozy fantasy game",
+   "duration_seconds": 2.5
+  },
+  "prompt": null,
+  "files": [
+   "assets/audio/pulse.mp3"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/elevenlabs/sound-effects/v2",
+  "name": "dissolve",
+  "seconds": 3.7,
+  "arguments": {
+   "output_format": "mp3_44100_128",
+   "text": "Small dark shadow creature dissolving into light: soft breathy hiss turning into tiny twinkling golden sparkles, fantasy game",
+   "duration_seconds": 1.5
+  },
+  "prompt": null,
+  "files": [
+   "assets/audio/dissolve.mp3"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/elevenlabs/sound-effects/v2",
+  "name": "step",
+  "seconds": 3.3,
+  "arguments": {
+   "output_format": "mp3_44100_128",
+   "text": "Single soft child footstep on short grass and moss, close, quiet",
+   "duration_seconds": 0.5
+  },
+  "prompt": null,
+  "files": [
+   "assets/audio/step.mp3"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/elevenlabs/sound-effects/v2",
+  "name": "wind",
+  "seconds": 6.0,
+  "arguments": {
+   "output_format": "mp3_44100_128",
+   "text": "Calm high-altitude night wind above a sea of clouds, soft airy whoosh, distant and peaceful, seamless ambience",
+   "duration_seconds": 12,
+   "loop": true
+  },
+  "prompt": null,
+  "files": [
+   "assets/audio/wind.mp3"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/elevenlabs/sound-effects/v2",
+  "name": "bridge",
+  "seconds": 3.3,
+  "arguments": {
+   "output_format": "mp3_44100_128",
+   "text": "Floating stepping stones of light rising into place one by one, soft magical crystalline chimes ascending, gentle low rock rumble",
+   "duration_seconds": 3
+  },
+  "prompt": null,
+  "files": [
+   "assets/audio/bridge.mp3"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/elevenlabs/sound-effects/v2",
+  "name": "ignite",
+  "seconds": 4.4,
+  "arguments": {
+   "output_format": "mp3_44100_128",
+   "text": "A great lighthouse lamp igniting at dawn: deep warm swelling whoosh of fire and light, glowing choir-like shimmer, triumphant and calm",
+   "duration_seconds": 5
+  },
+  "prompt": null,
+  "files": [
+   "assets/audio/ignite.mp3"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/elevenlabs/sound-effects/v2",
+  "name": "whisper",
+  "seconds": 5.9,
+  "arguments": {
+   "output_format": "mp3_44100_128",
+   "text": "Low eerie murmuring of small shadow creatures, breathy whispers and soft growls, dark fantasy, seamless ambience",
+   "duration_seconds": 8,
+   "loop": true
+  },
+  "prompt": null,
+  "files": [
+   "assets/audio/whisper.mp3"
+  ]
+ },
+ {
+  "endpoint": "fal-ai/elevenlabs/sound-effects/v2",
+  "name": "charge",
+  "seconds": 5.0,
+  "arguments": {
+   "output_format": "mp3_44100_128",
+   "text": "Lantern charging up: rising warm magical hum with soft crackle of light, building, fantasy game",
+   "duration_seconds": 1.5
+  },
+  "prompt": null,
+  "files": [
+   "assets/audio/charge.mp3"
+  ]
+ },
+ {
+  "endpoint": "elevenlabs/music/v2.5",
+  "name": "music_night",
+  "seconds": 11.8,
+  "arguments": {
+   "force_instrumental": true,
+   "music_length_ms": 90000,
+   "output_format": "mp3_44100_128"
+  },
+  "prompt": "Gentle melancholic ambient score for a cozy night exploration game: soft felt piano, warm celesta, airy string pads, slow tempo 70 bpm, hopeful but mysterious, sparse and calm, seamless loop, no drums, no vocals",
+  "files": [
+   "assets/audio/music_night.mp3"
+  ]
+ },
+ {
+  "endpoint": "elevenlabs/music/v2.5",
+  "name": "music_dawn",
+  "seconds": 8.5,
+  "arguments": {
+   "force_instrumental": true,
+   "music_length_ms": 45000,
+   "output_format": "mp3_44100_128"
+  },
+  "prompt": "Triumphant warm sunrise finale for a cozy fantasy game: swelling strings and french horn, bright piano arpeggios, glowing choir pads, emotional and uplifting, starts soft and blooms into a radiant climax then settles calmly, no drums, no vocals",
+  "files": [
+   "assets/audio/music_dawn.mp3"
+  ]
+ }
+]
