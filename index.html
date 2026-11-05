@@ -25,6 +25,11 @@
   #dots { position: absolute; right: 30px; top: 26px; display: flex; gap: 12px; }
   #dots i { width: 9px; height: 9px; border-radius: 50%; background: rgba(160, 190, 210, .25); box-shadow: none; transition: all .8s; }
   #dots i.on { background: #ffd27a; box-shadow: 0 0 10px #ffb04a, 0 0 22px rgba(255, 170, 60, .6); }
+  #loading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: #010c15; transition: opacity 1s; }
+  #loading .lt { letter-spacing: .5em; font-size: 22px; opacity: .7; margin-left: .5em; }
+  #loading .bar { width: 180px; height: 2px; background: rgba(246, 223, 176, .15); }
+  #loading .bar i { display: block; height: 100%; width: 0; background: #ffcf7a; box-shadow: 0 0 10px #ffb04a; transition: width .3s; }
+  #title { opacity: 0; }
   #fade { position: fixed; inset: 0; background: #010a12; opacity: 0; pointer-events: none; transition: opacity .7s; }
 </style>
 <script type="importmap">
@@ -40,6 +45,7 @@
 <div class="ui" id="hud"><div id="energy"></div><div id="dots"><i></i><i></i><i></i><i></i></div></div>
 <div class="ui" id="end"><h1>LUMEN</h1><h2>the lighthouse is lit</h2><div class="controls">R to walk again</div></div>
 <div id="fade"></div>
+<div class="ui" id="loading"><div class="lt">LUMEN</div><div class="bar"><i id="barfill"></i></div></div>
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -112,6 +118,7 @@ composer.addPass(grade);
 composer.addPass(new OutputPass());
 
 // ---------- loading ----------
+THREE.DefaultLoadingManager.onProgress = (url, n, total) => { const b = document.getElementById('barfill'); if (b) b.style.width = (100 * n / total) + '%'; };
 const gltf = new GLTFLoader();
 const texL = new THREE.TextureLoader();
 const loadG = url => new Promise((res, rej) => gltf.load(url, res, undefined, rej));
@@ -374,8 +381,12 @@ islands.forEach(I => {
 });
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _e = new THREE.Euler();
 function updateFerns(t) {
+  const cx = camera.position.x, cz = camera.position.z, hx = hero.position.x - cx, hz = hero.position.z - cz, hl2 = hx * hx + hz * hz || 1;
   for (const f of ferns) {
-    const lit = f.island.litT, s = f.size * (.45 + .55 * ease(lit));
+    const u = ((f.x - cx) * hx + (f.z - cz) * hz) / hl2, ox = cx + hx * u - f.x, oz = cz + hz * u - f.z;
+    const block = u > -.05 && u < 1.02 && Math.hypot(ox, oz) < .55 + f.size * .45;
+    f.k = THREE.MathUtils.damp(f.k ?? 1, block ? .12 : 1, 8, 1 / 30);
+    const lit = f.island.litT, s = f.size * (.45 + .55 * ease(lit)) * f.k;
     _e.set(Math.sin(t * 1.3 + f.x) * .05, f.rot, Math.sin(t * 1.1 + f.z) * .06);
     _m.compose(_p.set(f.x, f.y, f.z), _q.setFromEuler(_e), _s.set(s, s * (.6 + .4 * lit), s)); f.m.setMatrixAt(f.idx, _m);
     const c = .18 + .82 * lit; f.m.instanceColor.setXYZ(f.idx, c * .8, c, c * .85);
@@ -433,9 +444,9 @@ eyeMat.map = flameGlow.material.map;
 
 // the expanding ring of light (the video's key moment)
 const ringMat = new THREE.ShaderMaterial({
-  uniforms: { uR: { value: 0 }, uA: { value: 0 }, uTime: { value: 0 } },
-  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
-  fragmentShader: `uniform float uR, uA, uTime; varying vec2 vUv;
+  uniforms: { uR: { value: 0 }, uA: { value: 0 }, uTime: { value: 0 }, uClip: { value: new THREE.Vector3(0, 0, 1e4) } },
+  vertexShader: 'varying vec2 vUv, vW; void main(){ vUv = uv; vW = (modelMatrix * vec4(position,1.)).xz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
+  fragmentShader: `uniform float uR, uA, uTime; uniform vec3 uClip; varying vec2 vUv, vW;
     float n(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5); }
     void main(){ vec2 p = (vUv - .5) * 2.; float d = length(p), a = atan(p.y, p.x);
       float wob = .03 * sin(a * 9. + uTime * 6.) + .02 * sin(a * 23. - uTime * 9.);
@@ -443,6 +454,7 @@ const ringMat = new THREE.ShaderMaterial({
       float flames = band * (.6 + .6 * pow(abs(sin(a * 14. + uTime * 4.)), 6.));
       float fill = smoothstep(uR, 0., d) * .35 * step(d, uR);
       vec3 c = vec3(1.25, .82, .35) * (flames * 1.6 + fill);
+      c *= smoothstep(uClip.z, uClip.z - .6, length(vW - uClip.xy));   // stays on the grass, never over the void
       gl_FragColor = vec4(c * uA, 1.); }`,
   transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
 });
@@ -499,7 +511,7 @@ function placeAt(i) { const I = islands[i]; S.pos.set(I.x, 0, I.z + I.d * .2); S
 function resetGame() {
   islands.forEach((I, i) => { I.cleared = I.total === 0; I.litT = I.cleared ? 1 : 0; });
   bridges.forEach(B => { B.risen = false; B.stones.forEach(s => { s.visible = false; const k = walkable.indexOf(s); if (k >= 0) walkable.splice(k, 1); }); });
-  shadows.forEach(s => { s.alive = true; s.dying = -1; s.g.visible = true; s.g.position.copy(s.home); s.g.scale.setScalar(s.h); s.g.traverse(m => { if (m.isMesh) m.material.opacity = 1; }); });
+  shadows.forEach(s => { s.alive = true; s.dying = -1; s.g.visible = true; s.g.position.copy(s.home); s.gy = s.home.y; s.hopK = 0; s.g.scale.setScalar(s.h); s.g.traverse(m => { if (m.isMesh) m.material.opacity = 1; }); });
   raiseBridge(0, true);
   Object.assign(S, { energy: 1, charge: 0, charging: false, pulse: null, island: 0, lastSafe: 0, cleared: 0, dawn: 0, dawnT: -1, fadeT: -1, facing: Math.PI, endT: 0, snap: true });
   const start = +(Q.get('island') || 0);
@@ -520,7 +532,8 @@ function clearIsland(I, instant) {
 }
 const startPhase = () => { S.phase = 'play'; $('title').style.opacity = 0; $('hud').style.opacity = 1; AC.resume().then(startLoops); };
 resetGame();
-if (Q.has('autostart')) startPhase();
+$('loading').style.opacity = 0; setTimeout(() => $('loading').remove(), 1100);
+if (Q.has('autostart')) startPhase(); else $('title').style.opacity = 1;
 if (Q.has('dawn')) { startPhase(); for (let i = 1; i < 5; i++) clearIsland(islands[i], true); placeAt(5); ignite(); S.dawnT = 99; }
 
 window.__dbg = { camera, scene, renderer, hero, islands, lantern, flame, heroModel, sky };
@@ -543,6 +556,8 @@ function firePulse() {
   S.energy -= cost;
   const R = 3.2 + 5 * c;
   S.pulse = { t: 0, R, x: S.pos.x, y: S.pos.y, z: S.pos.z, dur: .55 + .25 * c };
+  const on = islandAt(S.pos.x, S.pos.z), CI = islands[on];
+  ringMat.uniforms.uClip.value.set(CI ? CI.x : S.pos.x, CI ? CI.z : S.pos.z, CI ? CI.d * .5 - .2 : 1.5);
   sfx('pulse', .9, 1.05 - c * .1); S.shake = .25 + .3 * c;
   play('Skill_01', .12); S.castT = .85;
   const I = islands[S.island];
@@ -610,9 +625,19 @@ function frame(forced) {
       let tx = s.home.x, tz = s.home.z, spd = .7;
       if (onIsland && d < 7.5) { tx = S.pos.x; tz = S.pos.z; spd = .85 / Math.sqrt(s.h); }
       const vx = tx - p.x, vz = tz - p.z, vl = Math.hypot(vx, vz);
-      if (vl > .95) { const nx = p.x + vx / vl * spd * dt, nz = p.z + vz / vl * spd * dt; const h = heightAt(nx, nz, p.y); if (h !== null) { p.x = nx; p.z = nz; p.y = THREE.MathUtils.damp(p.y, h, 10, dt); } }
-      s.g.rotation.y = Math.atan2(dx, dz);
-      const b = Math.sin(now * 3 + s.phase); s.g.scale.set(s.h * (1 + b * .04), s.h * (1 - b * .05), s.h * (1 + b * .04));
+      // they move in little hops: travel only while airborne, squash on landing, breathe when still
+      if (s.gy === undefined) s.gy = p.y;
+      const HOP = .55 * Math.sqrt(s.h); let lift = 0, sq = 0;
+      if (vl > .95 || s.hopK % 1 > .02) {
+        s.hopK = (s.hopK || 0) + dt / HOP; const ph = s.hopK % 1;
+        if (ph < .6) { const u = ph / .6; lift = Math.sin(u * Math.PI) * .2 * s.h; sq = -.08 * Math.sin(u * Math.PI);
+          if (vl > .95) { const st = spd * dt / .6, nx = p.x + vx / vl * st, nz = p.z + vz / vl * st; const h = heightAt(nx, nz, s.gy); if (h !== null) { p.x = nx; p.z = nz; s.gy = h; } } }
+        else sq = .14 * Math.sin((ph - .6) / .4 * Math.PI);
+      } else s.hopK = 0;
+      p.y = s.gy + lift;
+      s.g.rotation.y = THREE.MathUtils.damp(s.g.rotation.y, s.g.rotation.y + ((Math.atan2(dx, dz) - s.g.rotation.y + Math.PI * 3) % (Math.PI * 2) - Math.PI), 6, dt);
+      const b = Math.sin(now * 3 + s.phase) * .5 + sq / .1;
+      s.g.scale.set(s.h * (1 + b * .07), s.h * (1 - b * .08), s.h * (1 + b * .07));
       s.eyes.forEach(e => e.scale.setScalar(.12 * (Math.sin(now * .7 + s.phase * 3) > .97 ? .2 : 1)));
       if (rand() < dt * 6) smoke.emit(p.x + (rand() - .5) * .6 * s.h, p.y + rand() * .8 * s.h, p.z + (rand() - .5) * .6 * s.h, 0, .25, 0, 1.6, .5 * s.h, DARK);
       s.hitCd -= dt;
@@ -626,7 +651,7 @@ function frame(forced) {
     if (loops.whisper) loops.whisper.g.gain.value = THREE.MathUtils.damp(loops.whisper.g.gain.value, S.dawnT < 0 ? clamp(1 - nearest / 9, 0, 1) * .5 : 0, 3, dt);
 
     // the light went out: fade, wake on the last lit island
-    if (S.fadeT >= 0) { S.fadeT += dt; if (S.fadeT > .9 && S.fadeT - dt <= .9) { placeAt(S.lastSafe); S.snap = true; S.energy = 1; shadows.forEach(s => { if (s.alive && s.dying < 0) s.g.position.copy(s.home); }); }
+    if (S.fadeT >= 0) { S.fadeT += dt; if (S.fadeT > .9 && S.fadeT - dt <= .9) { placeAt(S.lastSafe); S.snap = true; S.energy = 1; shadows.forEach(s => { if (s.alive && s.dying < 0) { s.g.position.copy(s.home); s.gy = s.home.y; s.hopK = 0; } }); }
       if (S.fadeT > 1.3) { S.fadeT = -1; $('fade').style.opacity = 0; } }
 
     // ending: the beacon ring, then dawn
