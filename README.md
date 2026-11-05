@@ -66,3 +66,31 @@ WebP conversion and GLB optimization).
 
 Not generated: the glow of particles, the light ring, the god rays and the eye glints are shaders or
 procedural sprites, not images.
+
+## Verification
+
+- `verify/take.mp4`: a full playthrough (52 s of game time at 30 fps, 960×540). `tools/play_offline.mjs`
+  plays it with the keyboard and reads only `window.__game.state`: it frees the 4 islands (3, 4, 5 and 6
+  shadows), crosses each bridge, lights the beacon, and the dawn plays out. The take has 0 console errors,
+  the hero never falls, and the light goes out 0 times.
+  The liveliest 10 s window is 4.25 s → 14.25 s (`best_window.py`). `verify/take_sheet.jpg` shows one frame
+  every 2 s.
+- `verify/pairs.jpg`: the video (left) next to the game (right) at the start, the ring of light and the dawn.
+  `verify/g_*.png` are 1344×768 stills.
+- Frame rate: this container has no GPU (headless SwiftShader renders 4 to 5 fps), so the take was rendered
+  in `?manual` mode, one fixed 1/30 s step per frame. It was not measured on real hardware. The scene is about
+  230k triangles and about 110 draw calls, with one point-light shadow (lantern) and one directional shadow
+  at dawn.
+
+## What differs from the video
+
+- The camera follows from behind and above, like the video, but is a little closer, so the hero stays
+  readable while you play.
+- The island tops are flat rather than domed, and the ferns are camera-facing cards, not 3D plants.
+- The shadows look like the video's bramble creatures but are not animated with a rig: they bob, turn and
+  dissolve.
+- The ring of light is a shader drawn on a flat plane, so when it is wide it also lights up beyond the edge
+  of the island.
+- The lighthouse is visible far away from the start, so the goal reads. In the video it shows up only at the
+  end.
+- The night sky is a little more cyan and the far rocks are crisper than in the video.
